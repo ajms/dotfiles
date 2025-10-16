@@ -3,6 +3,11 @@
 // Check the wiki for a full description of the configuration:
 // https://yalter.github.io/niri/Configuration:-Introduction
 
+environment {
+  XDG_CURRENT_DESKTOP "niri"
+  XDG_SESSION_TYPE "wayland"
+}
+
 // Input device configuration.
 // Find the full list of options on the wiki:
 // https://yalter.github.io/niri/Configuration:-Input
@@ -60,7 +65,7 @@ input {
         // scroll-button-lock
         // middle-emulation
     }
-
+    disable-power-key-handling
     // Uncomment this to make the mouse warp to the center of newly focused windows.
     // warp-mouse-to-focus
 
@@ -93,7 +98,33 @@ output "Samsung Electric Company SAMSUNG 0x01000E00" {
     mode "3840x2160@30.00"
     scale 2 
     transform "normal"
-    position x=1280 y=0
+    position x=0 y=1080
+    background-color "#000000"
+}
+
+output "Samsung Display Corp. 0x414D Unknown" {
+    focus-at-startup
+    mode "3456x2160@60.001"
+    scale 2 
+    transform "normal"
+    position x=0 y=0
+    background-color "#000000"
+}
+
+output "Dell Inc. DELL U2414H X4J7181G1FPL" {
+    focus-at-startup
+    mode "1920x1080@60.00"
+    scale 1
+    transform "normal"
+    position x=1728 y=0
+    background-color "#000000"
+}
+
+output "Dell Inc. DELL U2414H X4J7181G1FTL" {
+    mode "1920x1080@60.00"
+    scale 1
+    transform "normal"
+    position x=3648 y=0
     background-color "#000000"
 }
 
@@ -259,7 +290,8 @@ layout {
 
 // This line starts waybar, a commonly used bar for Wayland compositors.
 spawn-at-startup "waybar"
-spawn-at-startup "keepassxc"
+spawn-sh-at-startup "alacritty -e tmux new-session ';' split-window -v ';' send-keys 'nvtop' C-m ';' select-pane -D ';' send-keys 'htop' C-m"
+spawn-at-startup "~/scripts/keepassxc"
 spawn-at-startup "nm-applet"
 spawn-at-startup "cryptomator"
 spawn-at-startup "pcloud"
@@ -328,6 +360,12 @@ window-rule {
     match app-id=r#"^firefox$"#
     open-maximized true
     open-on-workspace "web"
+}
+
+window-rule {
+  match app-id=r#"^cursor$"#
+  open-maximized true
+  open-on-workspace "dev1"
 }
 
 window-rule {
@@ -460,8 +498,8 @@ binds {
     // ...
 
     // And you can also move a whole workspace to another monitor:
-    // Mod+Shift+Ctrl+Left  { move-workspace-to-monitor-left; }
-    // ...
+    Mod+Shift+Ctrl+Left  { move-workspace-to-monitor-left; }
+    Mod+Shift+Ctrl+Right { move-workspace-to-monitor-right; }
 
     Mod+Page_Down      { focus-workspace-down; }
     Mod+Page_Up        { focus-workspace-up; }

@@ -1,7 +1,15 @@
+/* keep one visual style: FA6 solid */
 * {
-    /* `otf-font-awesome` is required to be installed for icons */
-    font-family: FontAwesome, Roboto, Helvetica, Arial, sans-serif;
-    font-size: 13px;
+  font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands",
+               "JetBrainsMono Nerd Font", "Symbols Nerd Font Mono", sans-serif;
+  font-size: 11px;
+}
+
+/* force solid weight where icons live */
+#battery, #pulseaudio, #network, #temperature, #load, #memory, #disk, #idle_inhibitor, #tray {
+  font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands",
+               "JetBrainsMono Nerd Font", sans-serif;
+  font-weight: 900; /* FA solid */
 }
 
 window#waybar {
@@ -61,6 +69,8 @@ button:hover {
 
 
 #workspaces button {
+    padding: 0px 2px;
+    padding: 0px 2px;
     background-color: transparent;
     color: #ffffff;
 }

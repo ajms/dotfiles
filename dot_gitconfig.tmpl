@@ -1,0 +1,51 @@
+[user]
+	email = {{ .email | quote }} 
+	name = {{ .name | quote }}
+	signingkey = {{ .signingkey | quote }} 
+
+[commit]
+	gpgsign = true
+
+[credential]
+	helper = /usr/lib/git-core/git-credential-libsecret
+
+[core]
+	editor = nvim 
+
+[merge]
+    tool = nvimdiff
+
+[mergetool "nvimdiff"]
+    cmd = nvr --remote-tab-wait +'Gdiffsplit!' "$MERGED"
+    trustExitCode = true
+
+[alias]
+	root = rev-parse --show-toplevel
+
+	s = status
+	st = status --short --branch
+
+	amend = commit --amend
+	commit = commit -v
+	a = add
+	ap = add -p 
+	l = log
+
+# checkout faster
+	co = checkout
+	cob = checkout -b
+	com = checkout main
+
+# Show local branches
+  slb = "!~/scripts/git_branches_pretty "
+
+; LOGS
+	l = log --pretty=format:\"%Cred%h%Creset %ad %Cred|%Creset %s%Cred%d %Cblue[%an]\" --graph --date=short --date=format:'%Y-%m-%d %H:%M:%S'
+	ll = log --pretty=\"%n%Cblue--------------------------------------------------------------------------%n%Cred%h%Creset %ad %Cred|%Creset %s%Cred%d %Cblue[%an]\" --date=short --stat
+	lll = log --patch --pretty=\"%n%Cblue--------------------------------------------------------------------------%n%Cred%h%Creset %ad %Cred|%Creset %s%Cred%d %Cblue[%an]\" --date=short --stat
+
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true

@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# bwrap-tmux: tmux inside a bwrap sandbox (profiles: --claude | --codex)
+# Adds: --share <host_path[=:sandbox_path]>  (repeatable, RW bind)
+#       --work  <sandbox_path>               (cd here inside sandbox)
+
+set -euo pipefail
+
+PROFILE="claude" # claude | codex
+AUTOSTART=1
+SESSION_NAME=""
+SHELL_PATH="${SHELL:-/bin/bash}"
+declare -a SHARE_SPECS=()
+WORKDIR_IN_SANDBOX="/work" # default (also binds $PWD to /work)
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  --claude)
+    PROFILE="claude"
+    shift
+    ;;
+  --codex)
+    PROFILE="codex"
+    shift
+    ;;
+  --no-autostart)
+    AUTOSTART=0
+    shift
+    ;;
+  --share)
+    [[ $# -ge 2 ]] || {
+      echo "--share requires a value"
+      exit 2
+    }
+    SHARE_SPECS+=("$2")
+    shift 2
+    ;;
+  --work)
+    [[ $# -ge 2 ]] || {
+      echo "--work requires a value"
+      exit 2
+    }
+    WORKDIR_IN_SANDBOX="$2"
+    shift 2
+    ;;
+  -h | --help)
+    cat <<'EOF'
+Usage: bwrap-tmux [--claude|--codex] [--no-autostart]
+                  [--share HOST_PATH[=:SANDBOX_PATH]]... [--work SANDBOX_PATH]
+
+Examples:
+  ./bwrap-tmux --claude --share ~/src/myrepo=/repo --work /repo
+  ./bwrap-tmux --codex  --share ~/notes   # mounts at /workspaces/notes
+Env:
+  NODE_PATH  path to Node.js bin dir (optional)
+  CLAUDE_HOME (default ~/claude) | CODEX_HOME (default ~/codex)
+  SHELL      default /bin/bash
+EOF
+    exit 0
+    ;;
+  *)
+    echo "Unknown option: $1" >&2
+    exit 2
+    ;;
+  esac
+done
+
+command -v bwrap >/dev/null || {
+  echo "bwrap not found"
+  exit 1
+}
+command -v tmux >/dev/null || {
+  echo "tmux not found"
+  exit 1
+}
+
+CLAUDE_HOME="${CLAUDE_HOME:-"$HOME/sandbox/claude"}"
+CODEX_HOME="${CODEX_HOME:-"$HOME/sandbox/codex"}"
+
+case "$PROFILE" in
+claude)
+  SESSION_NAME="claude"
+  SANDBOX_HOME="/claude"
+  TOOL_BIN_DIR="/claude/bin"
+  TOOL_CMD="claude"
+  CONFIG_FILES=("$HOME/.claude.json")
+  CONFIG_DIRS=("$HOME/.claude")
+  APP_HOME_SRC="$CLAUDE_HOME"
+  ;;
+codex)
+  SESSION_NAME="codex"
+  SANDBOX_HOME="/codex"
+  TOOL_BIN_DIR="/codex/bin"
+  TOOL_CMD="codex"
+  CONFIG_FILES=("$HOME/.codex.json" "$HOME/.openai")
+  CONFIG_DIRS=("$HOME/.codex" "$HOME/.config/codex")
+  APP_HOME_SRC="$CODEX_HOME"
+  ;;
+*)
+  echo "Invalid profile: $PROFILE"
+  exit 2
+  ;;
+esac
+
+opts=(
+  --ro-bind /usr /usr
+  --ro-bind /etc /etc
+  --ro-bind /run /run
+  --proc /proc
+  --dev /dev
+  --symlink usr/lib64 /lib64
+  --tmpfs /tmp
+  --unshare-all
+  --share-net
+  --die-with-parent
+  --new-session
+  --bind "$(pwd)" /work
+  --chdir "$WORKDIR_IN_SANDBOX"
+  --dev-bind /dev /dev
+  --bind /dev/pts /dev/pts
+)
+
+# Optional Node in PATH
+if [[ -n "${NODE_PATH-}" ]]; then
+  if [[ -d "$NODE_PATH" ]]; then
+    opts+=(--ro-bind "$NODE_PATH" /node)
+    PATH_VAL="/node:${TOOL_BIN_DIR}:/usr/bin"
+  elif [[ -x "$NODE_PATH" ]]; then
+    NODE_DIR="$(dirname "$NODE_PATH")"
+    opts+=(--ro-bind "$NODE_DIR" /node)
+    PATH_VAL="/node:${TOOL_BIN_DIR}:/usr/bin"
+  else
+    echo "Warning: NODE_PATH '$NODE_PATH' not found; skipping." >&2
+    PATH_VAL="${TOOL_BIN_DIR}:/usr/bin"
+  fi
+else
+  PATH_VAL="${TOOL_BIN_DIR}:/usr/bin"
+fi
+
+# App home
+mkdir -p $APP_HOME_SRC
+if [[ -d "$APP_HOME_SRC" ]]; then
+  opts+=(--bind "$APP_HOME_SRC" "$SANDBOX_HOME")
+else
+  echo "Warning: $APP_HOME_SRC not found; creating it now." >&2
+  opts+=(--tmpfs "$SANDBOX_HOME")
+fi
+
+# Configs
+for f in "${CONFIG_FILES[@]}"; do
+  [[ -f "$f" ]] && opts+=(--bind "$f" "${SANDBOX_HOME}/$(basename "$f")")
+done
+for d in "${CONFIG_DIRS[@]}"; do
+  [[ -d "$d" ]] && opts+=(--bind "$d" "${SANDBOX_HOME}/$(basename "$d")")
+done
+
+# Extra shares (RW)
+for spec in "${SHARE_SPECS[@]}"; do
+  src="${spec%%=*}"
+  dst="${spec#*=}"
+  if [[ "$spec" == *"="* ]]; then
+    : # dst provided
+  else
+    base="$(basename "$src")"
+    dst="/workspaces/$base"
+  fi
+  # normalize
+  src_abs="$(readlink -f "$src" 2>/dev/null || echo "$src")"
+  [[ -e "$src_abs" ]] || {
+    echo "Share not found: $src" >&2
+    exit 2
+  }
+  opts+=(--bind "$src_abs" "$dst")
+done
+
+opts+=(
+  --setenv HOME "$SANDBOX_HOME"
+  --setenv PATH "$PATH_VAL"
+  --setenv PS1 "[bwrap-${PROFILE}] \\u@\\h:\\w$ "
+)
+
+# Launch tmux
+START_CMD="tmux new -As ${SESSION_NAME}"
+[[ "$AUTOSTART" -eq 1 ]] && START_CMD+=" \"${TOOL_CMD}\""
+
+exec bwrap \
+  "${opts[@]}" \
+  "$SHELL_PATH" -lc "$START_CMD"
