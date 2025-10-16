@@ -1,0 +1,12 @@
+[Unit]
+Description=Add SSH keys to agent
+Requires=ssh-agent.service
+After=ssh-agent.service
+
+[Service]
+Type=oneshot
+Environment=SSH_AUTH_SOCK=%t/ssh-agent.socket
+ExecStart=/bin/sh -lc 'for k in %h/.ssh/*_sk; do [ -r "$k" ] && /usr/bin/ssh-add -q "$k"; done || true'
+
+[Install]
+WantedBy=default.target
