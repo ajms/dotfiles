@@ -98,6 +98,7 @@ output "Samsung Electric Company SAMSUNG 0x01000E00" {
 }
 
 output "Samsung Display Corp. 0x414D Unknown" {
+    focus-at-startup
     mode "3456x2160@60.001"
     scale 2 
     transform "normal"
@@ -106,6 +107,7 @@ output "Samsung Display Corp. 0x414D Unknown" {
 }
 
 output "Dell Inc. DELL U2414H X4J7181G1FPL" {
+    focus-at-startup
     mode "1920x1080@60.00"
     scale 1
     transform "normal"
@@ -343,10 +345,10 @@ workspace "web2"
 workspace "dev3"
 workspace "dev4"
 
-window-rule {
-  match app-id=r#"^Alacritty$"#
-  open-on-workspace "term"
-}
+// window-rule {
+//   match app-id=r#"^Alacritty$"#
+//   open-on-workspace "term"
+// }
 
 window-rule {
     match app-id=r#"^firefox$"#

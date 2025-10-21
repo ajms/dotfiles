@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+git_branches_pretty() {
+  # --- Colors ---
+  RS=$'\033[0m'; BOLD=$'\033[1m'; DIM=$'\033[2m'
+  RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'
+  BLUE=$'\033[34m'; MAGENTA=$'\033[35m'; CYAN=$'\033[36m'
+
+  # --- Column widths (tweak as you like) ---
+  DATE_W=10        # YYYY-MM-DD
+  BR_W=30
+  CONTR_W=24
+  PR_W=18
+
+  # --- Safe truncation with ellipsis ---
+  fit() {  # fit "string" width
+    local s="$1" w="$2"
+    local n=${#s}
+    if (( n <= w )); then printf "%s" "$s"; else printf "%s…" "${s:0:w-1}"; fi
+  }
+
+  # --- Preload PRs in one go (fast path). Requires gh; otherwise PR is "-" ---
+  declare -A PR_MAP
+  if command -v gh >/dev/null 2>&1; then
+    # list enough PRs to cover typical repos; raise --limit if needed
+    while IFS=$'\t' read -r headRef number state; do
+      # prefer showing the most relevant state (open > merged/closed). Keep first seen.
+      [[ -z "${PR_MAP[$headRef]}" ]] && PR_MAP[$headRef]="#${number} (${state})"
+    done < <(gh pr list --state all --limit 300 \
+            --json headRefName,number,state \
+            -q '.[] | [.headRefName, (.number|tostring), .state] | @tsv' 2>/dev/null)
+  fi
+
+  now_s=$(date +%s)
+
+  # Header
+  printf "%b%-*s  %-*s  %-*s  %-*s%b\n" "$BOLD" \
+    "$DATE_W" "Date" "$BR_W" "Branch" "$CONTR_W" "Last committer" "$PR_W" "PR" "$RS"
+
+  # Data
+  git for-each-ref --sort=-committerdate \
+    --format='%(HEAD)|%(committerdate:short)|%(refname:short)|%(committername)' refs/heads \
+  | while IFS='|' read -r head date branch committer; do
+      # Age-based color for the date
+      d_s=$(date -d "$date" +%s 2>/dev/null || printf '%s' "$now_s")
+      age=$(( (now_s - d_s) / 86400 ))
+      if   (( age <= 7 ));  then dcol=$GREEN
+      elif (( age <= 30 )); then dcol=$YELLOW
+      else dcol=$DIM
+      fi
+
+      # Current branch marker
+      mark=""
+      [[ "$head" == "*" ]] && mark="${BOLD}${MAGENTA}* ${RS}"
+
+      # Fallbacks
+      [[ -z "$committer" ]] && committer="-"
+      pr="${PR_MAP[$branch]:--}"
+
+      # Fit columns (use uncolored length for width; wrap with color outside)
+      date_fit=$(fit "$date" "$DATE_W")
+      branch_fit=$(fit "$branch" "$BR_W")
+      comm_fit=$(fit "$committer" "$CONTR_W")
+      pr_fit=$(fit "$pr" "$PR_W")
+
+      # Print aligned row with colors
+      printf "%b%-*s%b  %s%b%-*s%b  %b%-*s%b  %b%-*s%b\n" \
+        "$dcol" "$DATE_W" "$date_fit" "$RS" \
+        "$mark" "$CYAN" "$BR_W" "$branch_fit" "$RS" \
+        "$GREEN" "$CONTR_W" "$comm_fit" "$RS" \
+        "$MAGENTA" "$PR_W" "$pr_fit" "$RS"
+    done
+}
+
+git_branches_pretty
