@@ -1,0 +1,11 @@
+# ~/.config/systemd/user/xdg-desktop-portal.service
+[Unit]
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/lib/xdg-desktop-portal
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target
