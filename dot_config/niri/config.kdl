@@ -65,7 +65,7 @@ input {
         // scroll-button-lock
         // middle-emulation
     }
-
+    disable-power-key-handling
     // Uncomment this to make the mouse warp to the center of newly focused windows.
     // warp-mouse-to-focus
 
@@ -350,10 +350,10 @@ workspace "web2"
 workspace "dev3"
 workspace "dev4"
 
-// window-rule {
-//   match app-id=r#"^Alacritty$"#
-//   open-on-workspace "term"
-// }
+window-rule {
+  match app-id=r#"^Alacritty$"#
+  open-on-workspace "term"
+}
 
 window-rule {
     match app-id=r#"^firefox$"#
