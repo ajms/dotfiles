@@ -111,6 +111,15 @@ output "Samsung Display Corp. 0x414D Unknown" {
     background-color "#000000"
 }
 
+output "Samsung Electric Company U32J59x HNMX200067" {
+    focus-at-startup
+    mode "3840x2160@59.997"
+    scale 1.75
+    transform "normal"
+    position x=1728 y=0
+    background-color "#000000"
+}
+
 output "Dell Inc. DELL U2414H X4J7181G1FPL" {
     focus-at-startup
     mode "1920x1080@60.00"
@@ -369,7 +378,7 @@ window-rule {
 }
 
 window-rule {
-    match app-id=r#"^thunderbird$"#
+    match app-id=r#"^org.mozilla.Thunderbird$"#
     open-maximized true
     open-on-workspace "mail"
 }
