@@ -115,5 +115,5 @@ alias ls="eza -1 --icons --long --git --header --no-user"
 source /etc/profile.d/google-cloud-cli.sh
 
 eval "$(zoxide init zsh)"
-eval "$(pixi completion --shell zsh)"
+{{ .pixi_enabled }}eval "$(pixi completion --shell zsh)"
 eval "$(atuin init zsh)"
