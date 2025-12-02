@@ -372,6 +372,12 @@ window-rule {
 }
 
 window-rule {
+    match app-id=r#"^chromium$"#
+    open-maximized true
+    open-on-workspace "web"
+}
+
+window-rule {
   match app-id=r#"^cursor$"#
   open-maximized true
   open-on-workspace "dev1"
