@@ -91,24 +91,30 @@ output "LG Display 0x058B Unknown" {
     // If the position is unset or results in an overlap, the output is instead placed
     // automatically.
     position x=0 y=0
-    background-color "#000000"
+    layout {
+        background-color "#000000"
+    }
 }
 
 output "Samsung Electric Company SAMSUNG 0x01000E00" {
     mode "3840x2160@30.00"
-    scale 2 
+    scale 2
     transform "normal"
     position x=0 y=0
-    background-color "#000000"
+    layout {
+        background-color "#000000"
+    }
 }
 
 output "Samsung Display Corp. 0x414D Unknown" {
     focus-at-startup
     mode "3456x2160@60.001"
-    scale 2 
+    scale 2
     transform "normal"
     position x=0 y=0
-    background-color "#000000"
+    layout {
+        background-color "#000000"
+    }
 }
 
 output "Samsung Electric Company U32J59x HNMX200067" {
@@ -117,7 +123,9 @@ output "Samsung Electric Company U32J59x HNMX200067" {
     scale 1.75
     transform "normal"
     position x=1728 y=0
-    background-color "#000000"
+    layout {
+        background-color "#000000"
+    }
 }
 
 output "Dell Inc. DELL U2414H X4J7181G1FPL" {
@@ -126,7 +134,9 @@ output "Dell Inc. DELL U2414H X4J7181G1FPL" {
     scale 1
     transform "normal"
     position x=1728 y=0
-    background-color "#000000"
+    layout {
+        background-color "#000000"
+    }
 }
 
 output "Dell Inc. DELL U2414H X4J7181G1FTL" {
@@ -134,7 +144,9 @@ output "Dell Inc. DELL U2414H X4J7181G1FTL" {
     scale 1
     transform "normal"
     position x=3648 y=0
-    background-color "#000000"
+    layout {
+        background-color "#000000"
+    }
 }
 
 // Settings that influence how windows are positioned and sized.
