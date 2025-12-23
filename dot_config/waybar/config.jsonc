@@ -11,6 +11,7 @@
         //"layer": "top", // Waybar at top layer
         "position": "top", // Waybar position (top|bottom|left|right)
         "height": 25, // Waybar height (to be removed for auto height)
+        "fixed-center": true,
         // "width": 1280, // Waybar width
         "spacing": 0, // Gaps between modules (4px)
         // Choose the order of the modules
@@ -28,7 +29,8 @@
             "battery",
             "temperature",
             "memory",
-            "disk",
+            "disk#root",
+            "disk#home",
             "load",
             "niri/language",
             "tray",
@@ -43,8 +45,8 @@
             }
         },
         "clock": {
-            "format": "<small>{:%a %d %b %H:%M}</small>",
-            "format-alt": "<small>Week {:%V of the %Y}</small>",
+            "format": "{:%a %d %b %H:%M}",
+            "format-alt": "Week {:%V of the %Y}",
             "tooltip-format": "<tt><small>{calendar}</small></tt>",
             "calendar": {
                 "mode": "month",
@@ -181,20 +183,25 @@
             }
         },
         "niri/language": {
-            "format": "{} ",
+            "format": "{}",
             "on-click": "niri msg action switch-layout next",
-            "format-en": "En",
-            "format-de": "De",
-            "format-dk": "Dk",
-            "format-gr": "Gr",
-            "min-length": 10,
-            "align": 0.1
+            "format-en": "🇬🇧",
+            "format-de": "🇩🇪",
+            "format-da": "🇩🇰",
+            "format-gr": "🇬🇷",
+            "min-length": 2
         },
-        "disk": {
-            "format": "{used} / {total} ",
-            "format-alt": "{used} / {total} ({percentage_used}%) ",
+        "disk#root": {
+            "format": "{percentage_used}% 󰋊",
+            "format-alt": "/: {used}/{total} ({percentage_used}%) 󰋊",
             "path": "/",
-            "tooltip-format": "Disk: {used} / {total} ({percentage_used}%)"
+            "tooltip-format": "/: {used}/{total} 󰋊({percentage_used}%)"
+        },
+        "disk#home": {
+            "format": "{percentage_used}% 󰋊",
+            "format-alt": "/home: {used}/{total} ({percentage_used}%) 󰋊",
+            "path": "/home",
+            "tooltip-format": "/home: {used}/{total} 󰋊({percentage_used}%)"
         }
     }
 ]
