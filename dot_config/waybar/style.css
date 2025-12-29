@@ -7,7 +7,7 @@
 }
 
 /* force solid weight where icons live */
-#battery, #pulseaudio, #network, #temperature, #load, #memory, #disk, #disk.root, #disk.home, #idle_inhibitor, #tray, #language, #clock {
+#battery, #pulseaudio, #network, #temperature, #load, #memory, #disk, #disk.root, #disk.home, #idle_inhibitor, #tray, #language, #clock, #custom-memory, #custom-network, #custom-disk-root, #custom-disk-home {
   font-family: "Fira Code", "Font Awesome 7 Free Solid", "Font Awesome 7 Free", "Font Awesome 7 Brands",
                "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", sans-serif;
   font-weight: 900; /* FA solid */
@@ -213,6 +213,11 @@ button:hover {
     }
 }
 
+#battery.warning:not(.charging) {
+    background-color: #f0c020;
+    color: #000000;
+}
+
 #battery.critical:not(.charging) {
     background-color: #f53c3c;
     color: #ffffff;
@@ -362,4 +367,32 @@ label:focus {
 
 #scratchpad.empty {
     background-color: transparent;
+}
+
+/* Custom memory module - yellow > 50%, red > 80% */
+#custom-memory.warning {
+    color: #f0c020;
+}
+
+#custom-memory.critical {
+    color: #f53c3c;
+}
+
+/* Custom disk modules - red > 80% */
+#custom-disk-root.critical,
+#custom-disk-home.critical {
+    color: #f53c3c;
+}
+
+/* Custom network module - green > 500KB/s, yellow > 1MB/s, orange > 10MB/s */
+#custom-network.active {
+    color: #00ff00;
+}
+
+#custom-network.moderate {
+    color: #f0c020;
+}
+
+#custom-network.fast {
+    color: #ff8c00;
 }

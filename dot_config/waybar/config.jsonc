@@ -24,13 +24,13 @@
         "modules-right": [
             "idle_inhibitor",
             "pulseaudio",
-            "network",
+            "custom/network",
             "bluetooth",
             "battery",
             "temperature",
-            "memory",
-            "disk#root",
-            "disk#home",
+            "custom/memory",
+            "custom/disk-root",
+            "custom/disk-home",
             "load",
             "niri/language",
             "tray",
@@ -75,12 +75,15 @@
             "format": "{load1} ",
             "on-click": "kgx -e htop"
         },
-        "memory": {
-            "format": "{used} Gb ",
-            "format-alt": "{percentage}% ",
-            "tooltip-format": "Memory: {used} / {total} ({percentage}%)"
+        "custom/memory": {
+            "exec": "~/.config/waybar/scripts/memory.sh",
+            "return-type": "json",
+            "interval": 5,
+            "on-click": "kgx -e htop"
         },
         "temperature": {
+            "hwmon-path-abs": "/sys/devices/platform/coretemp.0/hwmon",
+            "input-filename": "temp1_input",
             "critical-threshold": 80,
             "format-critical": "  {temperatureC}°C {icon}",
             "format": "{temperatureC}°C {icon}",
@@ -94,9 +97,8 @@
         // Install brightnessctl libnotify
         "battery": {
             "states": {
-                // "good": 95,
-                "warning": 20,
-                "critical": 5
+                "warning": 30,
+                "critical": 10
             },
             "tooltip-format": "Charge: {capacity}%\nHealth: {health}%",
             "format": "{capacity}% {icon}",
@@ -129,15 +131,10 @@
             "on-click-right": "blueberry"
         },
         // Install iwd fuzzel polkit
-        "network": {
+        "custom/network": {
+            "exec": "~/.config/waybar/scripts/network.sh",
+            "return-type": "json",
             "interval": 2,
-            "format-wifi": "↓{bandwidthDownBytes} ↑{bandwidthUpBytes} ",
-            "format-ethernet": "↓{bandwidthDownBytes} ↑{bandwidthUpBytes} ",
-            "tooltip-format-wifi": "↓{bandwidthDownBytes} ↑{bandwidthUpBytes}  {essid}\nIP: {ipaddr}\nStrength: {signalStrength}%\nFreq: {frequency}MHz",
-            "tooltip-format-ethernet": "↓{bandwidthDownBytes} ↑{bandwidthUpBytes}  {ifname}\nIP: {ipaddr}",
-            "format-linked": "↓{bandwidthDownBytes} ↑{bandwidthUpBytes} {ifname} (No IP) ",
-            "format-disconnected": "Disconnected ⚠",
-            "format-alt": "{ifname}: ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}",
             "on-click-right": "nm-connection-editor"
         },
         "custom/shutdown": {
@@ -191,17 +188,15 @@
             "format-gr": "🇬🇷",
             "min-length": 2
         },
-        "disk#root": {
-            "format": "{percentage_used}% 󰋊",
-            "format-alt": "/: {used}/{total} ({percentage_used}%) 󰋊",
-            "path": "/",
-            "tooltip-format": "/: {used}/{total} 󰋊({percentage_used}%)"
+        "custom/disk-root": {
+            "exec": "~/.config/waybar/scripts/disk.sh / /",
+            "return-type": "json",
+            "interval": 30
         },
-        "disk#home": {
-            "format": "{percentage_used}% 󰋊",
-            "format-alt": "/home: {used}/{total} ({percentage_used}%) 󰋊",
-            "path": "/home",
-            "tooltip-format": "/home: {used}/{total} 󰋊({percentage_used}%)"
+        "custom/disk-home": {
+            "exec": "~/.config/waybar/scripts/disk.sh /home /home",
+            "return-type": "json",
+            "interval": 30
         }
     }
 ]
