@@ -128,7 +128,7 @@
             "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}",
             "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
             "tooltip-format-enumerate-connected-battery": "{device_alias}\t{device_address}\t{device_battery_percentage}%",
-            "on-click-right": "blueberry"
+            "on-click-right": "overskride"
         },
         // Install iwd fuzzel polkit
         "custom/network": {
@@ -149,8 +149,8 @@
         "pulseaudio": {
             "scroll-step": 5, // %, can be a float
             "tooltip-format": "{volume}%",
-            "format": "{icon} ", //"{format_source}",
-            "format-bluetooth": "{icon}{format_source}",
+            "format": "{volume}% {icon} {format_source}",
+            "format-bluetooth": "{volume}% {icon}{format_source}",
             "format-bluetooth-muted": " {icon}{format_source}",
             "format-muted": " {format_source}",
             "format-source": "{volume}%",
