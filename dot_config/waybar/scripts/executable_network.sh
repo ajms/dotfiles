@@ -64,4 +64,8 @@ else
     class=""
 fi
 
-echo "{\"text\": \"↓${rx_formatted} ↑${tx_formatted} \", \"tooltip\": \"Download: ${rx_formatted}/s\\nUpload: ${tx_formatted}/s\", \"class\": \"$class\"}"
+# Get active network interface (default route)
+active_iface=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
+[ -z "$active_iface" ] && active_iface="none"
+
+echo "{\"text\": \"↓${rx_formatted} ↑${tx_formatted} \", \"alt\": \"$active_iface\", \"tooltip\": \"Interface: ${active_iface}\\nDownload: ${rx_formatted}/s\\nUpload: ${tx_formatted}/s\", \"class\": \"$class\"}"
