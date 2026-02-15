@@ -4,12 +4,23 @@
 
 STATE_FILE="/tmp/waybar_network_state"
 
+# Get active network interface (default route)
+ACTIVE_IFACE=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
+
 get_rx_bytes() {
-    cat /sys/class/net/*/statistics/rx_bytes 2>/dev/null | awk '{sum+=$1} END {print sum}'
+    if [ -n "$ACTIVE_IFACE" ] && [ -f "/sys/class/net/$ACTIVE_IFACE/statistics/rx_bytes" ]; then
+        cat "/sys/class/net/$ACTIVE_IFACE/statistics/rx_bytes"
+    else
+        echo 0
+    fi
 }
 
 get_tx_bytes() {
-    cat /sys/class/net/*/statistics/tx_bytes 2>/dev/null | awk '{sum+=$1} END {print sum}'
+    if [ -n "$ACTIVE_IFACE" ] && [ -f "/sys/class/net/$ACTIVE_IFACE/statistics/tx_bytes" ]; then
+        cat "/sys/class/net/$ACTIVE_IFACE/statistics/tx_bytes"
+    else
+        echo 0
+    fi
 }
 
 format_speed() {
@@ -64,8 +75,6 @@ else
     class=""
 fi
 
-# Get active network interface (default route)
-active_iface=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
-[ -z "$active_iface" ] && active_iface="none"
+[ -z "$ACTIVE_IFACE" ] && ACTIVE_IFACE="none"
 
-echo "{\"text\": \"↓${rx_formatted} ↑${tx_formatted} \", \"alt\": \"$active_iface\", \"tooltip\": \"Interface: ${active_iface}\\nDownload: ${rx_formatted}/s\\nUpload: ${tx_formatted}/s\", \"class\": \"$class\"}"
+echo "{\"text\": \"↓${rx_formatted} ↑${tx_formatted} \", \"alt\": \"$ACTIVE_IFACE\", \"tooltip\": \"Interface: ${ACTIVE_IFACE}\\nDownload: ${rx_formatted}/s\\nUpload: ${tx_formatted}/s\", \"class\": \"$class\"}"
