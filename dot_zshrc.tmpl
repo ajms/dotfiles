@@ -117,3 +117,5 @@ source /etc/profile.d/google-cloud-cli.sh
 eval "$(zoxide init zsh)"
 {{ .pixi_enabled }}eval "$(pixi completion --shell zsh)"
 eval "$(atuin init zsh)"
+
+export PATH="$HOME/.npm-global/bin:$PATH"
