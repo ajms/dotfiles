@@ -374,11 +374,6 @@ workspace "dev3"
 workspace "dev4"
 
 window-rule {
-  match app-id=r#"^Alacritty$"#
-  open-on-workspace "term"
-}
-
-window-rule {
     match app-id=r#"^firefox$"#
     open-maximized true
     open-on-workspace "web"
