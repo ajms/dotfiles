@@ -318,7 +318,7 @@ spawn-at-startup "waybar"
 spawn-at-startup "~/scripts/keepassxc"
 spawn-at-startup "nm-applet"
 spawn-at-startup "thunderbird"
-spawn-at-startup "mattermost-desktop"
+spawn-at-startup "mattermost-desktop --ozone-platform=x11"
 spawn-at-startup "pcloud"
 
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
@@ -372,6 +372,11 @@ workspace "term2"
 workspace "web2"
 workspace "dev3"
 workspace "dev4"
+
+window-rule {
+    match app-id=r#"^Alacritty$"#
+    default-column-width { proportion 0.33333; }
+}
 
 window-rule {
     match app-id=r#"^firefox$"#
