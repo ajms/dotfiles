@@ -318,7 +318,7 @@ spawn-at-startup "waybar"
 spawn-at-startup "~/scripts/keepassxc"
 spawn-at-startup "nm-applet"
 spawn-at-startup "thunderbird"
-spawn-at-startup "mattermost-desktop --ozone-platform=x11"
+spawn-sh-at-startup "mattermost-desktop --ozone-platform=x11"
 spawn-at-startup "pcloud"
 
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
