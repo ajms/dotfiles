@@ -9,6 +9,12 @@
 [credential]
 	helper = /usr/lib/git-core/git-credential-libsecret
 
+[url "git@github.com-read:"]
+  insteadOf = git@github.com:
+
+[url "git@github.com-write:"]
+  pushInsteadOf = git@github.com:
+
 [core]
 	editor = nvim 
 
