@@ -1,0 +1,4 @@
+.include /etc/pulse/default.pa
+
+unload-module module-card-restore
+load-module module-card-restore restore_bluetooth_profile=true
