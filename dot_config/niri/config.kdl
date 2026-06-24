@@ -310,10 +310,11 @@ layout {
 // See the binds section below for more spawn examples.
 
 // This line starts waybar, a commonly used bar for Wayland compositors.
-spawn-sh-at-startup "alacritty -e tmux new-session ';' split-window -v ';' send-keys 'nvtop' C-m ';' select-pane -D ';' send-keys 'htop' C-m"
+spawn-sh-at-startup "alacritty -e btop"
 spawn-sh-at-startup "swayidle -w timeout 600 'swaylock -f' timeout 601 'niri msg action power-off-monitors' before-sleep 'swaylock -f'"
 spawn-sh-at-startup "gammastep -l 52:13 -t 6500:3500"
 
+spawn-at-startup "mako"
 spawn-at-startup "waybar"
 spawn-at-startup "~/scripts/keepassxc"
 spawn-at-startup "nm-applet"
