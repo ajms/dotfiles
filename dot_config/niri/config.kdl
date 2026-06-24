@@ -142,7 +142,7 @@ output "Dell Inc. DELL U2414H X4J7181G1FPL" {
 output "Dell Inc. DELL U2414H X4J7181G1FTL" {
     mode "1920x1080@60.00"
     scale 1
-    transform "normal"
+    transform "270"
     position x=3648 y=0
     layout {
         background-color "#000000"
