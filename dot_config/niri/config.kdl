@@ -142,7 +142,7 @@ output "Dell Inc. DELL U2414H X4J7181G1FPL" {
 output "Dell Inc. DELL U2414H X4J7181G1FTL" {
     mode "1920x1080@60.00"
     scale 1
-    transform "270"
+    transform "normal"
     position x=3648 y=0
     layout {
         background-color "#000000"
@@ -316,9 +316,9 @@ spawn-sh-at-startup "gammastep -l 52:13 -t 6500:3500"
 
 spawn-at-startup "mako"
 spawn-at-startup "waybar"
-spawn-at-startup "~/scripts/keepassxc"
+spawn-sh-at-startup "sleep 5 && ~/scripts/keepassxc"
 spawn-at-startup "nm-applet"
-spawn-at-startup "thunderbird"
+spawn-sh-at-startup "sleep 5 && thunderbird"
 spawn-sh-at-startup "mattermost-desktop --ozone-platform=x11"
 spawn-at-startup "pcloud"
 
