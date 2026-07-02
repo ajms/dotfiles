@@ -1,0 +1,12 @@
+[Unit]
+Description=Set Bluetooth mic volume to 100% on connect
+Requires=pulseaudio.service
+After=pulseaudio.service
+
+[Service]
+ExecStart=%h/.local/bin/bt-mic-volume.sh
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
