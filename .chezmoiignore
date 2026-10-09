@@ -6,3 +6,4 @@
 .pi/agent/bin
 .pi/agent/pi-web
 .pi/agent/**/node_modules
+.pi/agent/extensions/statusline/codex-quota-cache.json

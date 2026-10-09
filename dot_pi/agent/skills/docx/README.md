@@ -15,7 +15,7 @@ of regenerating them and losing the layout.
 ## Quickstart
 
 ```bash
-which docx || pipx install -e ~/gitsky/dotfiles/agentic/skills/docx
+which docx || pipx install -e ~/.pi/agent/skills/docx
 
 docx unpack app.docx work/   # extract + one-time app.docx.backup
 docx scan   work/            # map of every body block (style, comment ids, text)

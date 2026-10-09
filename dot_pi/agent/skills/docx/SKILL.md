@@ -59,7 +59,7 @@ Verify it is on the PATH, and install it editable with pipx from the skill
 directory if missing:
 
 ```bash
-which docx || pipx install -e ~/gitsky/dotfiles/agentic/skills/docx
+which docx || pipx install -e ~/.pi/agent/skills/docx
 ```
 
 For development inside the skill directory, run via uv instead: `uv run docx scan

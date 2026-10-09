@@ -55,7 +55,7 @@ Verify it is on the PATH, and install it editable with pipx from the skill
 directory if missing:
 
 ```bash
-which xlsx || pipx install -e ~/gitsky/dotfiles/agentic/skills/xlsx
+which xlsx || pipx install -e ~/.pi/agent/skills/xlsx
 ```
 
 For development inside the skill directory, run via uv instead: `uv run xlsx scan

@@ -16,7 +16,7 @@ openpyxl and losing everything it does not round-trip.
 ## Quickstart
 
 ```bash
-which xlsx || pipx install -e ~/gitsky/dotfiles/agentic/skills/xlsx
+which xlsx || pipx install -e ~/.pi/agent/skills/xlsx
 
 xlsx unpack book.xlsx work/        # extract + one-time book.xlsx.backup
 xlsx sheets work/                  # tab order -> name, sheetId, part path

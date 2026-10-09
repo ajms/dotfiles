@@ -61,7 +61,7 @@ import {
 const STATUS_KEY = "voice-input";
 
 /** Resolved once at load — env is stable for the process lifetime. */
-const EXTENSION_DIR = path.join(os.homedir(), "gitsky", "dotfiles", "agentic", "pi", "extensions", "_voice-input");
+const EXTENSION_DIR = path.join(os.homedir(), ".pi", "agent", "extensions", "_voice-input");
 const DEFAULT_STREAM_WRAPPER = path.join(EXTENSION_DIR, "bin", "voice-stream.mjs");
 const HAS_STREAM_WRAPPER = fs.existsSync(DEFAULT_STREAM_WRAPPER);
 
