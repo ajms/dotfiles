@@ -4,10 +4,13 @@
  *   • Every agent `bash` call runs inside bubblewrap: the host is read-only;
  *     the project (git toplevel or cwd), its shared git dir, /tmp and the
  *     paths in ~/.pi/agent/sandbox.json are writable. Git hooks/config stay
- *     read-only and SSH private keys plus configured secrets are masked.
+ *     read-only and SSH private keys plus configured secrets are masked, as
+ *     are session sockets (runtime dir, D-Bus, docker, sockets in /tmp).
+ *     A project root containing $HOME is refused. `"network": false` in
+ *     sandbox.json cuts network access.
  *     The hook itself lives in hook.ts and is plugged in by bash-output.
- *   • `write`/`edit` calls outside those roots and a short list of destructive
- *     commands are blocked at `tool_call`.
+ *   • `write`/`edit` calls outside those roots, any tool reading a masked
+ *     secret and a short list of destructive commands are blocked at `tool_call`.
  *   • Before each orchestrator run the project is checkpointed to
  *     refs/pi-checkpoints/* (tracked + untracked, not ignored files).
  *
@@ -37,6 +40,7 @@ function describe(cwd: string): string {
 		`  writable: ${policy.writable.join(", ")}`,
 		`  read-only: ${policy.readOnly.join(", ") || "(none)"}`,
 		`  masked: ${[...policy.hidden, ...policy.hiddenDirs].join(", ") || "(none)"}`,
+		`  network: ${policy.network ? "on" : "off"}`,
 		`  config: ${CONFIG_PATH}`,
 	].join("\n");
 }

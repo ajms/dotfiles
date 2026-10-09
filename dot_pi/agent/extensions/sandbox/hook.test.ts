@@ -37,3 +37,19 @@ test("missing bwrap fails closed instead of running unsandboxed", () => {
 	assert.equal(status, 126);
 	assert.ok(!fs.existsSync(path.join(cwd, "ran")));
 });
+
+test("running from the home directory is refused instead of making all of home writable", () => {
+	const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pi-hook-home-")));
+	const out = createSpawnHook(() => state({ home }))({ command: "touch ran", cwd: home, env: {} });
+	let status = 0;
+	let stderr = "";
+	try {
+		execFileSync("/bin/bash", ["-c", out.command], { cwd: home, stdio: ["ignore", "ignore", "pipe"] });
+	} catch (error) {
+		status = (error as { status: number }).status;
+		stderr = String((error as { stderr: Buffer }).stderr);
+	}
+	assert.equal(status, 126);
+	assert.match(stderr, /home directory/);
+	assert.ok(!fs.existsSync(path.join(home, "ran")));
+});

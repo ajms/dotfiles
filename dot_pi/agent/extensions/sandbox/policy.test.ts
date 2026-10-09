@@ -4,10 +4,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-import { bwrapArgs, dangerousCommand, isWithin, resolvePolicy, wrapCommand, type SandboxPolicy } from "./policy.ts";
+import * as net from "node:net";
+import { bwrapArgs, dangerousCommand, isWithin, resolvePolicy, wrapCommand, type HostPaths, type SandboxPolicy } from "./policy.ts";
+
+const NO_HOST: HostPaths = { runtimeDirs: [], sockets: [], tmp: fs.mkdtempSync(path.join(os.tmpdir(), "pi-empty-tmp-")) };
 
 function policy(overrides: Partial<SandboxPolicy> = {}): SandboxPolicy {
-	return { writable: ["/work/repo", "/tmp"], readOnly: [], hidden: [], hiddenDirs: [], ...overrides };
+	return { project: "/work/repo", writable: ["/work/repo", "/tmp"], readOnly: [], hidden: [], hiddenDirs: [], network: true, ...overrides };
 }
 
 test("bwrap mounts the host read-only and only the writable roots read-write", () => {
@@ -56,7 +59,7 @@ test("a real sandboxed command can write the project but not outside it", { skip
 	fs.mkdirSync(outside);
 	const wrapped = wrapCommand(
 		`touch inside.txt && (touch ${outside}/x.txt 2>/dev/null && echo escaped || echo blocked)`,
-		bwrapArgs({ writable: [project], readOnly: [], hidden: [], hiddenDirs: [] }, project),
+		bwrapArgs({ project, writable: [project], readOnly: [], hidden: [], hiddenDirs: [], network: true }, project),
 	);
 	const out = execFileSync("/bin/bash", ["-c", wrapped], { encoding: "utf8" }).trim();
 	assert.equal(out, "blocked");
@@ -86,12 +89,12 @@ test("policy for a git worktree: project and shared git dir writable, hooks/conf
 	git(main, "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "i");
 	git(main, "worktree", "add", "-q", wt);
 
-	const p = resolvePolicy(path.join(wt), { writable: ["~/.cache", "~/.missing"], hidden: ["~/.pi/agent/auth.json"], hiddenDirs: ["~/.gnupg"] }, home);
+	const p = resolvePolicy(path.join(wt), { writable: ["~/.cache", "~/.missing"], hidden: ["~/.pi/agent/auth.json"], hiddenDirs: ["~/.gnupg"] }, home, NO_HOST);
 
 	const mainGit = fs.realpathSync(path.join(main, ".git"));
 	assert.ok(p.writable.includes(fs.realpathSync(wt)));
 	assert.ok(p.writable.includes(mainGit));
-	assert.ok(p.writable.includes("/tmp"));
+	assert.ok(p.writable.includes(NO_HOST.tmp));
 	assert.ok(p.writable.includes(path.join(home, ".cache")));
 	assert.ok(!p.writable.includes(path.join(home, ".missing")));
 	assert.ok(p.readOnly.includes(path.join(mainGit, "hooks")));
@@ -102,7 +105,81 @@ test("policy for a git worktree: project and shared git dir writable, hooks/conf
 
 test("policy outside git makes only the working directory the project root", () => {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-policy-nogit-"));
-	const p = resolvePolicy(dir, { writable: [], hidden: [], hiddenDirs: [] }, dir);
-	assert.deepEqual(p.writable, [fs.realpathSync(dir), "/tmp"]);
+	const p = resolvePolicy(dir, { writable: [], hidden: [], hiddenDirs: [] }, dir, NO_HOST);
+	assert.deepEqual(p.writable, [fs.realpathSync(dir), NO_HOST.tmp]);
 	assert.deepEqual(p.readOnly, []);
+});
+
+test("session sockets are cut off: agent env vars unset, network kept unless disabled", () => {
+	const args = bwrapArgs(policy(), "/work/repo").join(" ");
+	for (const name of ["SSH_AUTH_SOCK", "DBUS_SESSION_BUS_ADDRESS", "DISPLAY"]) assert.ok(args.includes(`--unsetenv ${name}`), name);
+	assert.ok(!args.includes("--unshare-net"));
+	assert.ok(bwrapArgs(policy({ network: false }), "/work/repo").includes("--unshare-net"));
+});
+
+test("network can be turned off in the config", () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-policy-net-"));
+	assert.equal(resolvePolicy(dir, { writable: [], hidden: [], hiddenDirs: [] }, dir, NO_HOST).network, true);
+	assert.equal(resolvePolicy(dir, { writable: [], hidden: [], hiddenDirs: [], network: false }, dir, NO_HOST).network, false);
+});
+
+async function listen(socketPath: string): Promise<net.Server> {
+	const server = net.createServer().listen(socketPath);
+	await new Promise((resolve) => server.once("listening", resolve));
+	return server;
+}
+
+test("policy masks the runtime dir, system sockets and sockets in tmp", async () => {
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pi-sock-")));
+	const tmp = path.join(root, "tmp");
+	const runtime = path.join(root, "run-user");
+	const docker = path.join(root, "docker.sock");
+	fs.mkdirSync(path.join(tmp, "tmux-1"), { recursive: true });
+	fs.mkdirSync(path.join(tmp, "plain"));
+	fs.mkdirSync(runtime);
+	fs.writeFileSync(docker, "");
+	const servers = [await listen(path.join(tmp, "top.sock")), await listen(path.join(tmp, "tmux-1", "default"))];
+	try {
+		const host: HostPaths = { runtimeDirs: [runtime, path.join(root, "missing")], sockets: [docker], tmp };
+		const p = resolvePolicy(root, { writable: [], hidden: [], hiddenDirs: [] }, root, host);
+		assert.ok(p.writable.includes(tmp));
+		assert.ok(!p.writable.includes("/tmp"));
+		assert.deepEqual(p.hiddenDirs.sort(), [runtime, path.join(tmp, "tmux-1")].sort());
+		assert.deepEqual(p.hidden.sort(), [docker, path.join(tmp, "top.sock")].sort());
+	} finally {
+		for (const s of servers) s.close();
+	}
+});
+
+test("a socket dir that contains the project is not masked over it", async () => {
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pi-sock-proj-")));
+	const tmp = path.join(root, "tmp");
+	const project = path.join(tmp, "work");
+	fs.mkdirSync(project, { recursive: true });
+	const server = await listen(path.join(tmp, "work", "agent.sock"));
+	try {
+		const p = resolvePolicy(project, { writable: [], hidden: [], hiddenDirs: [] }, root, { runtimeDirs: [], sockets: [], tmp });
+		assert.ok(!p.hiddenDirs.includes(project));
+	} finally {
+		server.close();
+	}
+});
+
+test("a real sandboxed command cannot see masked sockets or the runtime dir", { skip: !fs.existsSync("/usr/bin/bwrap") }, async () => {
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pi-sock-real-")));
+	const tmp = path.join(root, "tmp");
+	const runtime = path.join(root, "run-user");
+	fs.mkdirSync(tmp);
+	fs.mkdirSync(runtime);
+	fs.writeFileSync(path.join(runtime, "bus"), "");
+	const sock = path.join(tmp, "top.sock");
+	const server = await listen(sock);
+	try {
+		const p = resolvePolicy(root, { writable: [], hidden: [], hiddenDirs: [] }, os.homedir(), { runtimeDirs: [runtime], sockets: [], tmp });
+		const script = `test -S ${sock} && echo sock; ls -A ${runtime}; echo done`;
+		const out = execFileSync("/bin/bash", ["-c", wrapCommand(script, bwrapArgs(p, root))], { encoding: "utf8" }).trim();
+		assert.equal(out, "done");
+	} finally {
+		server.close();
+	}
 });

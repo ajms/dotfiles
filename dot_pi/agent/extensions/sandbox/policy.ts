@@ -1,19 +1,41 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 export interface SandboxPolicy {
+	project: string;
 	writable: string[];
 	readOnly: string[];
 	hidden: string[];
 	hiddenDirs: string[];
+	network: boolean;
 }
 
 export interface SandboxConfig {
 	writable: string[];
 	hidden: string[];
 	hiddenDirs: string[];
+	network?: boolean;
 }
+
+// Session sockets reachable from inside the sandbox would let a command act
+// outside it (systemd-run via D-Bus, ssh-agent, docker, tmux send-keys).
+export interface HostPaths {
+	runtimeDirs: string[];
+	sockets: string[];
+	tmp: string;
+}
+
+export function hostPaths(): HostPaths {
+	return {
+		runtimeDirs: [process.env.XDG_RUNTIME_DIR || `/run/user/${os.userInfo().uid}`, "/run/dbus"],
+		sockets: ["/run/docker.sock"],
+		tmp: "/tmp",
+	};
+}
+
+const SESSION_ENV = ["SSH_AUTH_SOCK", "DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "WAYLAND_DISPLAY"];
 
 function expandHome(p: string, home: string): string {
 	return p === "~" || p.startsWith("~/") ? path.join(home, p.slice(1)) : p;
@@ -36,6 +58,34 @@ function gitDirs(cwd: string): { top: string; common: string } | null {
 	}
 }
 
+function isSocket(p: string): boolean {
+	try {
+		return fs.lstatSync(p).isSocket();
+	} catch {
+		return false;
+	}
+}
+
+function entries(dir: string): string[] {
+	try {
+		return fs.readdirSync(dir).map((name) => path.join(dir, name));
+	} catch {
+		return [];
+	}
+}
+
+// Sockets directly in tmp are masked as files; a directory holding one
+// (tmux-<uid>, .X11-unix, ssh-XXXX) is masked whole.
+function tmpSockets(tmp: string): { files: string[]; dirs: string[] } {
+	const files: string[] = [];
+	const dirs: string[] = [];
+	for (const entry of entries(tmp)) {
+		if (isSocket(entry)) files.push(entry);
+		else if (entries(entry).some(isSocket)) dirs.push(entry);
+	}
+	return { files, dirs };
+}
+
 function sshPrivateKeys(home: string): string[] {
 	const dir = path.join(home, ".ssh");
 	try {
@@ -45,7 +95,11 @@ function sshPrivateKeys(home: string): string[] {
 	}
 }
 
-export function resolvePolicy(cwd: string, config: SandboxConfig, home: string): SandboxPolicy {
+export function secretPaths(config: SandboxConfig, home: string): { hidden: string[]; hiddenDirs: string[] } {
+	return { hidden: [...sshPrivateKeys(home), ...existing(config.hidden, home)], hiddenDirs: existing(config.hiddenDirs, home) };
+}
+
+export function resolvePolicy(cwd: string, config: SandboxConfig, home: string, host: HostPaths = hostPaths()): SandboxPolicy {
 	const git = gitDirs(cwd);
 	const project = git?.top ?? fs.realpathSync(cwd);
 	const writable = [project];
@@ -55,13 +109,24 @@ export function resolvePolicy(cwd: string, config: SandboxConfig, home: string):
 		// Hooks and config run outside the sandbox the next time the user runs git.
 		readOnly.push(...existing([path.join(git.common, "hooks"), path.join(git.common, "config")], home));
 	}
-	writable.push("/tmp", ...existing(config.writable, home).filter((p) => !writable.includes(p)));
+	writable.push(host.tmp, ...existing(config.writable, home).filter((p) => !writable.includes(p)));
+	const secrets = secretPaths(config, home);
+	const sockets = tmpSockets(host.tmp);
+	const coversWritable = (dir: string) => writable.some((w) => isWithin(w, [dir]));
 	return {
+		project,
 		writable,
 		readOnly,
-		hidden: [...sshPrivateKeys(home), ...existing(config.hidden, home)],
-		hiddenDirs: existing(config.hiddenDirs, home),
+		hidden: [...secrets.hidden, ...existing(host.sockets, home), ...sockets.files],
+		hiddenDirs: [...secrets.hiddenDirs, ...[...existing(host.runtimeDirs, home), ...sockets.dirs].filter((d) => !coversWritable(d))],
+		network: config.network !== false,
 	};
+}
+
+export function homeRootReason(policy: SandboxPolicy, home: string): string | null {
+	return isWithin(home, [policy.project])
+		? `the project root ${policy.project} contains your home directory, so all of it would be writable; start pi inside a project (/sandbox off to override)`
+		: null;
 }
 
 export function bwrapArgs(policy: SandboxPolicy, cwd: string): string[] {
@@ -71,6 +136,8 @@ export function bwrapArgs(policy: SandboxPolicy, cwd: string): string[] {
 	for (const dir of policy.readOnly) args.push("--ro-bind", dir, dir);
 	for (const file of policy.hidden) args.push("--ro-bind", "/dev/null", file);
 	for (const dir of policy.hiddenDirs) args.push("--tmpfs", dir);
+	for (const name of SESSION_ENV) args.push("--unsetenv", name);
+	if (!policy.network) args.push("--unshare-net");
 	args.push("--die-with-parent", "--new-session", "--unshare-pid", "--chdir", cwd);
 	return args;
 }

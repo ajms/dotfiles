@@ -39,6 +39,27 @@ test("write and edit cannot touch git hooks or config", () => {
 	assert.equal(guardToolCall("edit", { path: ".git/config" }, project, state)?.block, true);
 });
 
+test("no tool can read hidden secrets, including through symlinks", () => {
+	const { root, project, state } = setup();
+	state.config = { writable: [], hidden: ["~/token.json"], hiddenDirs: ["~/.gnupg"] };
+	fs.mkdirSync(path.join(root, ".ssh"));
+	fs.mkdirSync(path.join(root, ".gnupg"));
+	for (const f of [".ssh/id_test", ".ssh/id_test.pub", "token.json", ".gnupg/key"]) fs.writeFileSync(path.join(root, f), "x");
+	fs.symlinkSync(path.join(root, "token.json"), path.join(project, "link.json"));
+	for (const p of ["~/.ssh/id_test", "~/token.json", "~/.gnupg/key", "link.json"]) {
+		assert.equal(guardToolCall("read", { path: p }, project, state)?.block, true, p);
+	}
+	assert.equal(guardToolCall("read", { path: "~/.ssh/id_test.pub" }, project, state), undefined);
+	assert.equal(guardToolCall("read", { path: "/etc/hostname" }, project, state), undefined);
+});
+
+test("writes are refused when the project root would be the home directory", () => {
+	const { root, state } = setup();
+	const result = guardToolCall("write", { path: "notes.txt" }, root, state);
+	assert.equal(result?.block, true);
+	assert.match(result?.reason ?? "", /home directory/);
+});
+
 test("nothing is guarded while the sandbox is off", () => {
 	const { root, project, state } = setup();
 	state.enabled = false;

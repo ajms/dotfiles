@@ -137,7 +137,10 @@ renders a prompt with buttons, waits for an answer, and records the Q&A.
 
 Your `bash` commands run inside a bubblewrap sandbox: the project, /tmp and a few
 caches are writable; the rest of the filesystem is read-only and credentials are
-masked. `write`/`edit` outside the project are refused. If a command fails with a
-read-only or permission error outside the project, do not try to work around it —
-tell the user what needs to be written where so they can do it or run `/sandbox off`.
-Network access is not restricted.
+masked. `write`/`edit` outside the project are refused, and no tool may read the
+masked credentials. Session sockets (D-Bus, ssh-agent, docker, tmux, the
+display) are unreachable, so desktop, clipboard and agent-forwarding commands will
+not work from `bash`. If a command fails with a read-only or permission error
+outside the project, do not try to work around it — tell the user what needs to be
+written where so they can do it or run `/sandbox off`. Network access is on unless
+`sandbox.json` sets `"network": false`.

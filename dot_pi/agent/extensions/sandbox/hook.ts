@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { BashSpawnContext } from "@earendil-works/pi-coding-agent";
-import { bwrapArgs, resolvePolicy, shellQuote, wrapCommand, type SandboxConfig } from "./policy.ts";
+import { bwrapArgs, homeRootReason, resolvePolicy, shellQuote, wrapCommand, type SandboxConfig } from "./policy.ts";
 
 export interface SandboxState {
 	enabled: boolean;
@@ -50,6 +50,8 @@ export function createSpawnHook(getState: () => SandboxState) {
 			return { ...ctx, command: `echo ${shellQuote(message)} >&2; exit 126` };
 		}
 		const policy = resolvePolicy(ctx.cwd, state.config, state.home);
+		const refusal = homeRootReason(policy, state.home);
+		if (refusal) return { ...ctx, command: `echo ${shellQuote(`sandbox: ${refusal}`)} >&2; exit 126` };
 		return { ...ctx, command: wrapCommand(ctx.command, bwrapArgs(policy, ctx.cwd), state.bwrapPath) };
 	};
 }
