@@ -1,0 +1,25 @@
+{
+  "enabled": true,
+  "writable": [
+    "~/.cache",
+    "~/.npm",
+    "~/.local/share/uv",
+    "~/.local/share/pnpm",
+    "~/.cargo/registry"
+  ],
+  "hidden": [
+    "~/.pi/agent/auth.json",
+    "~/.netrc",
+    "~/.git-credentials",
+    "~/.docker/config.json"
+  ],
+  "hiddenDirs": [
+    "~/.gnupg",
+    "~/.aws",
+    "~/credentials",
+    "~/.password-store",
+    "~/.local/share/keyrings",
+    "~/.mozilla",
+    "~/.config/chromium"
+  ]
+}

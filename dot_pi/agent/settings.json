@@ -1,0 +1,13 @@
+{
+  "lastChangelogVersion": "1.1.0",
+  "defaultProvider": "llama.cpp",
+  "defaultThinkingLevel": "high",
+  "httpIdleTimeoutMs": 0,
+  "hideThinkingBlock": true,
+  "quietStartup": true,
+  "theme": "gruvbox",
+  "terminal": {
+    "clearOnShrink": false
+  },
+  "packages": []
+}

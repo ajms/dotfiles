@@ -1,0 +1,519 @@
+/**
+ * Conversation name generator.
+ *
+ * After each user message, asks the model (via a lightweight `pi -p`
+ * sub-invocation) to update the concise title using the current name and latest
+ * message. Applies it via Pi's built-in setSessionName(). Pi persists it as a
+ * session_info entry in the session file, where it shows up in Pi's session
+ * selector and is read by the pi-agent.nvim plugin for the window title.
+ *
+ * The naming call runs fire-and-forget so it never delays the agent's reply;
+ * the name is filled in a few seconds later. If the model call fails, we fall
+ * back to a mechanical title for an unnamed session, or retain its current
+ * title if it has one. Naming calls
+ * are serialized per session; newer messages supersede an unfinished result.
+ *
+ * Subagents are the exception: they are named by their parent, which passes the
+ * label down in PI_SUBAGENT_SESSION_NAME (see extensions/subagent/session-label.ts).
+ * A child applies that label and stops — no nested `pi -p`, no mechanical parse
+ * of a multi-KB task prompt.
+ */
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const MAX_NAME_LENGTH = 30;
+const NAMING_TIMEOUT_MS = 30_000;
+const MAX_RETRIES = 2;
+const MESSAGE_LIMIT = 1_000;
+const CURRENT_NAME_LIMIT = 100;
+
+/** How much of the prompt the mechanical extractor is allowed to look at. A
+ *  title always comes out of the opening of a prompt, so scanning further buys
+ *  nothing — and keeps every regex below bounded in input size. */
+const TITLE_SCAN_LIMIT = 1_000;
+
+/** Env var the subagent extension uses to hand its label to a child process. */
+const SUBAGENT_SESSION_NAME_ENV = "PI_SUBAGENT_SESSION_NAME";
+
+export default function (pi: ExtensionAPI) {
+	// Keep only the newest pending message while a naming call is running.
+	const namingInFlight = new Map<string, { pending?: string }>();
+	let sessionGeneration = 0;
+	const invalidateNaming = () => {
+		sessionGeneration++;
+		namingInFlight.clear();
+	};
+	// Session contexts become invalid after a switch/reload/shutdown; never
+	// apply a late result to the next session (or to a closing Pi process).
+	pi.on("session_start", invalidateNaming);
+	pi.on("session_shutdown", invalidateNaming);
+	pi.on("session_before_switch", invalidateNaming);
+	pi.on("session_before_fork", invalidateNaming);
+	pi.on("session_before_tree", invalidateNaming);
+
+	// Listen for message_end events - this fires for both user and assistant messages.
+	// Note: the ExtensionContext is the SECOND handler argument, not event.context.
+	pi.on("message_end", async (event, ctx) => {
+		const msg = event.message;
+
+		// Only process user messages
+		if (!msg || msg.role !== "user") {
+			return;
+		}
+
+		// We are a subagent: the parent already named us, e.g. `builder2: Fix the
+		// parser` (see extensions/subagent/session-label.ts). Apply that label and
+		// return before any model call or mechanical fallback — a child must never
+		// spawn a nested `pi -p` to name itself, and its prompt is a multi-KB task
+		// spec, not something to parse for a title. Ordinary sessions never have
+		// this variable set, so nothing above or below changes for them.
+		const inheritedName = process.env[SUBAGENT_SESSION_NAME_ENV]?.trim();
+		if (inheritedName) {
+			try {
+				if (ctx.sessionManager.getSessionName() !== inheritedName) {
+					pi.setSessionName(inheritedName);
+				}
+			} catch (error) {
+				// Subagents run with --no-session, so there may be nowhere to write
+				// the name. Degrade quietly; the parent's UI still shows the label.
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				console.error(`[conversation-name] Failed to apply inherited session name: ${errorMessage}`);
+			}
+			return;
+		}
+
+		const sessionManager = ctx.sessionManager;
+		const sessionId = sessionManager.getSessionId();
+		const cwd = ctx.cwd;
+		const generation = sessionGeneration;
+		const content = (msg as { content?: unknown }).content;
+		let latestMessage = "";
+		if (typeof content === "string") {
+			latestMessage = content.slice(0, MESSAGE_LIMIT);
+		} else if (Array.isArray(content)) {
+			for (const part of content) {
+				if (part?.type === "text" && typeof part.text === "string") {
+					const remaining = MESSAGE_LIMIT - latestMessage.length;
+					latestMessage += `${latestMessage ? " " : ""}${part.text.slice(0, remaining)}`;
+					if (latestMessage.length >= MESSAGE_LIMIT) {
+						break;
+					}
+				}
+			}
+		}
+		latestMessage = latestMessage.trim();
+		if (!latestMessage) {
+			return;
+		}
+
+		const running = namingInFlight.get(sessionId);
+		if (running) {
+			running.pending = latestMessage;
+			return;
+		}
+		const state: { pending?: string } = {};
+		namingInFlight.set(sessionId, state);
+
+		// Run in the background so the agent's reply is never blocked.
+		void (async () => {
+			let message: string | undefined = latestMessage;
+			try {
+				while (message && generation === sessionGeneration && sessionManager.getSessionId() === sessionId) {
+					const currentName = sessionManager.getSessionName() ?? "";
+					let name = "";
+					try {
+						name = await generateNameWithModel(pi, message, currentName, cwd);
+					} catch {
+						// Fall through to the mechanical fallback.
+					}
+					if (!name) {
+						// A failed refresh must not replace a useful title with a vague
+						// mechanical title for a short follow-up (e.g. "what about it?").
+						name = currentName || generateConversationNameFallback(message);
+					}
+					// Never apply a stale result to a newer message or a different session.
+					if (generation !== sessionGeneration || sessionManager.getSessionId() !== sessionId) {
+						break;
+					}
+					if (!state.pending && name && name !== sessionManager.getSessionName()) {
+						try {
+							pi.setSessionName(name);
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error);
+							console.error(`[conversation-name] Failed to set session name: ${errorMessage}`);
+						}
+					}
+					message = state.pending;
+					state.pending = undefined;
+				}
+			} finally {
+				if (namingInFlight.get(sessionId) === state) {
+					namingInFlight.delete(sessionId);
+				}
+			}
+		})();
+	});
+
+	// No tools to register - this extension works via hooks only
+	return {};
+}
+
+/**
+ * Ask the model for a concise session title via a lightweight `pi -p` call.
+ * Uses structured JSON output with a schema that enforces the 30-character limit.
+ * Retries up to MAX_RETRIES times if validation fails. Returns "" on any failure.
+ */
+async function generateNameWithModel(
+	pi: ExtensionAPI,
+	prompt: string,
+	currentName: string,
+	cwd: string,
+): Promise<string> {
+	// Keep the input bounded - a title only needs the gist of the request.
+	const request = prompt.slice(0, MESSAGE_LIMIT);
+	const previousTitle = currentName.slice(0, CURRENT_NAME_LIMIT);
+
+	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+		const instruction =
+		`Update the session title (max 30 chars) using both the current title and latest user message.\n` +
+		`The title describes the conversation's overarching task, not only the latest step.\n` +
+		`Keep the existing topic when the message continues that task, including small bug fixes, tests, or refinements to a feature being implemented.\n` +
+		`Only change the topic when the user starts a genuinely different task.\n` +
+		`For example, current title "Implementing Search Feature" + message "Fix the filter bug from the search implementation" -> "Implementing Search Feature", not "Fixing Filter Bug".\n\n` +
+		`Format: Use a noun phrase or gerund + object pattern. Examples:\n` +
+		`- "Fixing conversation naming"\n` +
+		`- "Debugging extension triggers"\n` +
+		`- "Session name bug"\n` +
+		`- "Implementing search feature"\n` +
+		`- "Wrong type inference"\n\n` +
+		`Rules:\n` +
+		`- Output ONLY the title — no quotes, JSON, or markdown\n` +
+		`- 1-30 characters (inclusive)\n` +
+		`- Use Title Case\n` +
+		`- No trailing punctuation\n` +
+		`- Do NOT truncate mid-word or use ellipses\n` +
+		`- Be specific: include key nouns/verbs from the request\n\n` +
+		`Current session title: ${previousTitle || "(none)"}\n` +
+		`Latest user message: ${request}`;
+
+		const result = await pi.exec("pi", ["-p", "--no-extensions", "--no-session", instruction], {
+			cwd,
+			timeout: NAMING_TIMEOUT_MS,
+		});
+
+		if (result.code !== 0) {
+			continue; // Retry
+		}
+
+		const name = truncateTitle(sanitizeTitle(result.stdout));
+		if (!name) {
+			continue; // Retry
+		}
+
+		// Success - validated name within the 30-character limit
+		return name;
+	}
+
+	// All retries failed
+	return "";
+}
+
+/**
+ * Clean up raw model output into a single-line title: take the last non-empty
+ * line, strip wrapping quotes/backticks and trailing punctuation, collapse
+ * whitespace, and truncate to MAX_NAME_LENGTH.
+ */
+function toTitleCase(str: string): string {
+	// Minor words that stay lowercase (unless first word)
+	const minorWords = new Set(["a", "an", "the", "and", "but", "or", "for", "nor", "on", "at", "to", "in", "of"]);
+
+	return str
+		.split(" ")
+		.map((word, idx) => {
+			if (idx === 0) {
+				// Always capitalize first word
+				return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+			}
+			if (minorWords.has(word.toLowerCase())) {
+				return word.toLowerCase();
+			}
+			return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+		})
+		.join(" ");
+}
+
+function validateAndFormatTitle(title: string): string {
+	if (!title || title.length === 0) {
+		return "";
+	}
+
+	// Strip surrounding quotes or backticks
+	title = title.replace(/^["'`]+|["'`]+$/g, "").trim();
+	// Collapse internal whitespace
+	title = title.replace(/\s+/g, " ");
+	// Drop trailing sentence punctuation
+	title = title.replace(/[.!?,;:]+$/, "").trim();
+	// Remove markdown formatting
+	title = title.replace(/\*\*(.+?)\*\*/g, "$1"); // **bold**
+	title = title.replace(/\*(.+?)\*/g, "$1"); // *italic*
+	title = title.replace(/`(.+?)`/g, "$1"); // `code`
+
+	// Reject if still contains markdown or looks like code/JSON
+	if (title.startsWith("```") || title.includes("\n") || title.startsWith("{") || title.startsWith("[")) {
+		return "";
+	}
+
+	// Enforce Title Case
+	title = toTitleCase(title);
+
+	return title;
+}
+
+/**
+ * Clean up raw model output into a single-line title.
+ * Tries to find a title-like line, then validates and formats it.
+ */
+function sanitizeTitle(raw: string): string {
+	const lines = raw
+		.split("\n")
+		.map((l) => l.trim())
+		.filter((l) => l.length > 0);
+
+	if (lines.length === 0) {
+		return "";
+	}
+
+	// Strategy 1: Look for a line that looks like a title
+	// (starts with capital or common title gerund, no markdown)
+	const titlePattern = /^(?:[A-Z0-9]|Fixing|Debugging|Implementing|Adding|Removing|Updating|Querying|Reading|Writing|Searching|Exploring|Analyzing)/;
+	for (const line of lines) {
+		if (titlePattern.test(line) && !line.startsWith("```") && !line.includes("**")) {
+			const formatted = validateAndFormatTitle(line);
+			if (formatted && formatted.length <= MAX_NAME_LENGTH) {
+				return formatted;
+			}
+		}
+	}
+
+	// Strategy 2: Fall back to the first line
+	return validateAndFormatTitle(lines[0]);
+}
+
+/**
+ * Truncate a title to MAX_NAME_LENGTH, respecting word boundaries where
+ * possible to avoid cutting mid-word.
+ */
+/**
+ * Extract a descriptive title from the user's prompt by identifying the main action
+ * and key topic. Uses pattern matching to find the core task.
+ */
+export function extractTitleFromPrompt(prompt: string): string {
+	// Bound the input before anything pattern-matches it. Subagent prompts are
+	// thousands of characters of prose, and this runs on the main thread.
+	const trimmed = prompt.trim().slice(0, TITLE_SCAN_LIMIT);
+
+	// Remove URLs — they're noise in a title
+	let cleaned = trimmed.replace(/https?:\/\/\S+/g, "");
+
+	// Remove file paths (e.g., @~/Downloads/... or /path/to/file)
+	cleaned = cleaned.replace(/[@~]?\/[\w./-]+/g, "");
+
+	// Remove common filler prefixes
+	cleaned = cleaned.replace(
+		/^(can you|could you|please|I want to|I need to|I'd like to|let's|help me|show me|tell me|explain|read|look at|figure out)\s+/i,
+		"",
+	);
+
+	// Identify the main action verb (expanded list)
+	const actionMatch =
+		/\b(debug|fix|implement|add|remove|update|change|modify|refactor|optimize|test|analyze|explore|investigate|review|check|explain|understand|learn|read|write|create|build|setup|configure|install|deploy|search|find|locate|compare|convert|migrate|merge|split|parse|validate|generate|extract|format|style|document|rename|move|copy|delete|run|execute|start|stop|restart|enable|disable|uninstall|figure out|evaluate|benchmark|measure|profile|trace|diagnose)\b/i
+			.exec(cleaned);
+	let actionVerb = actionMatch?.[1] ?? "";
+
+	// Handle multi-word verbs
+	if (actionVerb.toLowerCase() === "figure out") {
+		actionVerb = "understand";
+	}
+
+	// Map common verbs to gerund form for title style
+	const verbToGerund: Record<string, string> = {
+		debug: "Debugging",
+		fix: "Fixing",
+		implement: "Implementing",
+		add: "Adding",
+		remove: "Removing",
+		update: "Updating",
+		change: "Changing",
+		modify: "Modifying",
+		refactor: "Refactoring",
+		optimize: "Optimizing",
+		test: "Testing",
+		analyze: "Analyzing",
+		explore: "Exploring",
+		investigate: "Investigating",
+		review: "Reviewing",
+		check: "Checking",
+		explain: "Explaining",
+		understand: "Understanding",
+		learn: "Learning",
+		read: "Reading",
+		write: "Writing",
+		create: "Creating",
+		build: "Building",
+		setup: "Setting Up",
+		configure: "Configuring",
+		install: "Installing",
+		deploy: "Deploying",
+		search: "Searching",
+		find: "Finding",
+		locate: "Locating",
+		compare: "Comparing",
+		convert: "Converting",
+		migrate: "Migrating",
+		merge: "Merging",
+		split: "Splitting",
+		parse: "Parsing",
+		validate: "Validating",
+		generate: "Generating",
+		extract: "Extracting",
+		format: "Formatting",
+		style: "Styling",
+		document: "Documenting",
+		rename: "Renaming",
+		move: "Moving",
+		copy: "Copying",
+		delete: "Deleting",
+		run: "Running",
+		execute: "Executing",
+		start: "Starting",
+		stop: "Stopping",
+		restart: "Restarting",
+		enable: "Enabling",
+		disable: "Disabling",
+		uninstall: "Uninstalling",
+		evaluate: "Evaluating",
+		benchmark: "Benchmarking",
+		measure: "Measuring",
+		profile: "Profiling",
+		trace: "Tracing",
+		diagnose: "Diagnosing",
+	};
+
+	const gerund = actionVerb ? verbToGerund[actionVerb.toLowerCase()] || actionVerb + "ing" : "";
+
+	// Extract technical concepts: multi-word terms, then capitalized proper nouns
+	// First, look for technical phrases (2+ word combinations that are meaningful)
+	const techPhrases = [
+		/technical term: (?:multiple choice|generative model|language model|machine learning|deep learning|neural network|attention mechanism|transformer model)/gi,
+		/multiple[- ]?choice/gi,
+		/generative[- ]?model/gi,
+		/language[- ]?model/gi,
+		/llm/gi,
+		/mcq/gi,
+		/mmlu/gi,
+		/arc[- ]?(?:easy|challenge)/gi,
+		/hellaswag/gi,
+		/common[s]?ense/gi,
+		/fastapi/gi,
+		/postgresql/gi,
+		/docker compose/gi,
+		/vue\.?js/gi,
+		/type ?script/gi,
+		/java ?script/gi,
+		/node\.?js/gi,
+		/react\.?js/gi,
+		/py ?torch/gi,
+		/tensor ?flow/gi,
+		/hugging ?face/gi,
+		/transformer/gi,
+		/tokenization/gi,
+		/embedding/gi,
+		/fine[- ]?tun(?:e|ing)/gi,
+		/zero[- ]?shot/gi,
+		/few[- ]?shot/gi,
+		/log[- ]?prob/gi,
+		/logits/gi,
+		/normaliz(?:e|ation)/gi,
+		/structured[- ]?generation/gi,
+		/constrained[- ]?decoding/gi,
+	].flatMap((pattern) => cleaned.match(pattern) || []);
+
+	// If we found technical phrases, use them
+	let keyTerm = "";
+	if (techPhrases.length > 0) {
+		// Deduplicate and join
+		const unique = Array.from(new Set(techPhrases.map((t) => t.toLowerCase())));
+		keyTerm = unique.slice(0, 2).map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" ");
+	} else {
+		// Fallback: extract key nouns after the verb.
+		// The separator MUST stay inside the repeated group as mandatory (`[- ]+`,
+		// not an optional `[- ]?`): `(?:[a-z]+[- ]?)+` lets one run of lowercase
+		// words be partitioned in exponentially many ways, so when none of the
+		// suffix words appears V8 backtracks forever and pins a core — a builder
+		// subagent hung for ~3 h this way. Keep this regex linear.
+		const afterVerb = cleaned.substring(actionMatch?.index ?? 0).toLowerCase();
+		const nounMatch = /\b((?:[a-z]+[- ])+(?:evaluation|model|task|benchmark|dataset|config|api|endpoint|file|module|function))\b/.exec(afterVerb);
+		if (nounMatch) {
+			keyTerm = nounMatch[1].split(/[- ]+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+		}
+	}
+
+	// Build title: "[Gerund] [Key Topic]"
+	if (gerund && keyTerm) {
+		// Try different key term combinations, preferring ones that fit
+		const keyTermParts = keyTerm.split(" ");
+		for (let i = keyTermParts.length; i > 0; i--) {
+			const subset = keyTermParts.slice(0, i).join(" ");
+			const title = `${gerund} ${subset}`;
+			if (title.length <= MAX_NAME_LENGTH && title.length > 5) {
+				return title;
+			}
+		}
+	}
+
+	// Fallback: use first meaningful phrase. Split on a comma or on a standalone
+	// connective word. The words must sit in an alternation group, not inside a
+	// character class: in /[,\b(?:about|for)\b]/ the \b is a backspace and
+	// (?:…)/:/ are literals, so it was a bag of single characters that split the
+	// phrase at the first `a`, `t`, `i`, … No quantifiers here at all, so the
+	// pattern stays linear.
+	const firstPhrase = cleaned.split(/,|\b(?:about|for|with|in|on|at|to|from)\b/)[0]?.trim();
+	if (firstPhrase && firstPhrase.length > 5 && firstPhrase.length <= MAX_NAME_LENGTH) {
+		return firstPhrase.charAt(0).toUpperCase() + firstPhrase.slice(1);
+	}
+
+	return "";
+}
+
+function truncateTitle(title: string): string {
+	if (title.length <= MAX_NAME_LENGTH) {
+		return title;
+	}
+	// Find the last space within the limit (search the full title, not a pre-sliced substring)
+	const lastSpace = title.slice(0, MAX_NAME_LENGTH).lastIndexOf(" ");
+	if (lastSpace > MAX_NAME_LENGTH / 2) {
+		// Cut at word boundary
+		return title.slice(0, lastSpace);
+	}
+	// No good word boundary, just use the limit
+	return title.slice(0, MAX_NAME_LENGTH);
+}
+
+/**
+ * Mechanical fallback when the model naming call fails: take the first
+ * sentence, strip common filler prefixes, capitalize, and truncate.
+ */
+function generateConversationNameFallback(prompt: string): string {
+	// Try to extract a structured title from the prompt
+	const extracted = extractTitleFromPrompt(prompt);
+	if (extracted) {
+		const validated = validateAndFormatTitle(extracted);
+		if (validated) {
+			return truncateTitle(validated);
+		}
+	}
+
+	// Last resort: use first few words
+	const words = prompt.trim().split(/\s+/).slice(0, 5).join(" ");
+	return validateAndFormatTitle(words) || "New Conversation";
+}

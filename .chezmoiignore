@@ -1,0 +1,8 @@
+# pi: runtime state, credentials and installed dependencies
+.pi/agent/auth.json
+.pi/agent/models-store.json
+.pi/agent/sessions
+.pi/agent/install
+.pi/agent/bin
+.pi/agent/pi-web
+.pi/agent/**/node_modules

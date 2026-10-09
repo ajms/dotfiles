@@ -1,0 +1,25 @@
+{
+  "name": "extensions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "eslint.config.js",
+  "scripts": {
+    "test": "node --test test-runner.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "@typescript-eslint/parser": "^8.60.0",
+    "@typescript-eslint/utils": "^8.60.0",
+    "eslint": "^10.4.0",
+    "selenium-webdriver": "^4.49.0",
+    "typescript-eslint": "^8.60.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/selenium-webdriver": "^4.35.7"
+  }
+}

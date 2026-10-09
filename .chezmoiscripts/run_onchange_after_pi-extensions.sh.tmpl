@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Install pi extension npm deps and link pi's own packages for typechecking.
+# Re-runs when any extension manifest changes:
+{{- range (list "" "read/" "search/" "_outliner/" "bash-output/") }}
+# {{ . }}package.json {{ include (printf "dot_pi/agent/extensions/%spackage.json" .) | sha256sum }}
+# {{ . }}package-lock.json {{ include (printf "dot_pi/agent/extensions/%spackage-lock.json" .) | sha256sum }}
+{{- end }}
+set -euo pipefail
+
+PI_HOME="$HOME/.pi/agent"
+EXT_DIR="$PI_HOME/extensions"
+[ -d "$EXT_DIR" ] || exit 0
+command -v npm >/dev/null || { echo "pi-extensions: npm not found, skipping" >&2; exit 0; }
+
+failed=""
+for pkg in "$EXT_DIR"/*/package.json; do
+  grep -q '"dependencies"\|"devDependencies"' "$pkg" || continue
+  dir="$(dirname "$pkg")"
+  echo "--- pi extension deps: $(basename "$dir")"
+  rm -rf "$dir/node_modules"
+  # Native builds (tree-sitter, better-sqlite3) run because each package.json
+  # lists them under allowScripts; Node 25+ needs C++20 for them.
+  (cd "$dir" && CXXFLAGS="--std=c++20" npm install --legacy-peer-deps --no-audit --no-fund --loglevel=warn) \
+    || failed="$failed $(basename "$dir")"
+done
+
+# Root install must precede the links below: npm prunes entries it did not create.
+(cd "$EXT_DIR" && npm install --no-audit --no-fund --loglevel=warn) || failed="$failed (root)"
+
+version="$(cat "$PI_HOME/install/current-version" 2>/dev/null || true)"
+pi_modules="$PI_HOME/install/releases/$version/node_modules"
+if [ -n "$version" ] && [ -d "$pi_modules/@earendil-works/pi-coding-agent" ]; then
+  mkdir -p "$EXT_DIR/node_modules/@earendil-works"
+  for m in "$pi_modules"/@earendil-works/*; do
+    ln -sfn "$m" "$EXT_DIR/node_modules/@earendil-works/$(basename "$m")"
+  done
+  ln -sfn "$pi_modules/typebox" "$EXT_DIR/node_modules/typebox"
+else
+  echo "pi-extensions: managed pi install not found; typecheck links skipped" >&2
+fi
+
+if [ -n "$failed" ]; then
+  echo "pi-extensions: install failed for:$failed" >&2
+  exit 1
+fi
