@@ -3,7 +3,7 @@
   "defaultProvider": "llama.cpp",
   "defaultModel": "qwen3.6-35b-a3b",
   "enabledModels": ["llama.cpp/*"],
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "low",
   "httpIdleTimeoutMs": 0,
   "hideThinkingBlock": true,
   "quietStartup": true,
