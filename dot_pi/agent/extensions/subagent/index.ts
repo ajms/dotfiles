@@ -24,6 +24,8 @@ import {
 	findRepoRoot,
 	mergeAndCleanup,
 	sweepOrphanedSubagentArtifacts,
+	preserveBranch,
+	preservedBranchHint,
 	type WorktreeCleanupResult,
 	type WorktreeHandle,
 } from "./worktree.ts";
@@ -428,9 +430,19 @@ async function discardWorktreeAttempt(
 		}
 	}
 
-	const brRes = await runGitForDiscard(handle.parentRepoRoot, ["branch", "-D", handle.branchName]);
-	if (brRes.code !== 0 && !brRes.stderr.includes("not found")) {
-		messages.push(`Failed to delete branch ${handle.branchName}: ${brRes.stderr.trim() || brRes.stdout.trim()}`);
+	// Keep committed work: only delete the branch if it has no commits beyond base.
+	let preservedBranch: string | undefined;
+	const headRes = await runGitForDiscard(handle.parentRepoRoot, ["rev-parse", handle.branchName]);
+	const hasCommits = headRes.code === 0 && headRes.stdout.trim() !== handle.baseSha;
+	if (hasCommits) {
+		preservedBranch = await preserveBranch(handle.parentRepoRoot, handle.branchName);
+		messages[0] = reason.replace("Discarded worktree", "Removed worktree");
+		messages.push(preservedBranchHint(preservedBranch));
+	} else {
+		const brRes = await runGitForDiscard(handle.parentRepoRoot, ["branch", "-D", handle.branchName]);
+		if (brRes.code !== 0 && !brRes.stderr.includes("not found")) {
+			messages.push(`Failed to delete branch ${handle.branchName}: ${brRes.stderr.trim() || brRes.stdout.trim()}`);
+		}
 	}
 
 	try {
@@ -439,7 +451,7 @@ async function discardWorktreeAttempt(
 		/* ignore */
 	}
 
-	return { merged: false, skipped: true, message: messages.join(" ") };
+	return { merged: false, skipped: true, message: messages.join(" "), preservedBranch };
 }
 
 type OnUpdateCallback = (partial: AgentToolResult<SingleResult>) => void;
@@ -956,6 +968,11 @@ async function runSingleAgent(
 							currentResult.stderr = `${currentResult.stderr}\n[worktree] ${cleanup.message}`.trim();
 							if (currentResult.exitCode === 0) currentResult.exitCode = 1;
 							if (!currentResult.errorMessage) currentResult.errorMessage = cleanup.message;
+						} else if (cleanup.preservedBranch) {
+							currentResult.stderr = `${currentResult.stderr}\n[worktree] ${cleanup.message}`.trim();
+							currentResult.errorMessage = currentResult.errorMessage
+								? `${currentResult.errorMessage} [worktree] ${cleanup.message}`
+								: cleanup.message;
 						}
 					} catch (err) {
 						currentResult.stderr = `${currentResult.stderr}\n[worktree] cleanup failed: ${(err as Error).message}`.trim();
@@ -989,12 +1006,17 @@ async function runSingleAgent(
 							worktreeHandle,
 							`Discarded worktree ${worktreeHandle.branchName} after failed model attempt.`,
 						);
+						if (currentResult.worktreeCleanup.preservedBranch) {
+							currentResult.stderr = `${currentResult.stderr}\n[worktree] ${currentResult.worktreeCleanup.message}`.trim();
+						}
 					} catch {
 						/* ignore; surface the original failure */
 					}
 				}
 				currentResult.exitCode = 1;
-				currentResult.errorMessage = (err as Error).message;
+				currentResult.errorMessage = currentResult.worktreeCleanup?.preservedBranch
+					? `${(err as Error).message} [worktree] ${currentResult.worktreeCleanup.message}`
+					: (err as Error).message;
 				currentResult.stderr = `${currentResult.stderr}\n${(err as Error).message}`.trim();
 				const attempt: ModelAttempt = {
 					model: childModel,
