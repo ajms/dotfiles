@@ -15,7 +15,7 @@ refuse:
     message: "I don't reproduce files verbatim. Give me the path; I'll read it inside my worktree as part of doing the change."
   - pattern: "\\b(explore the (code ?base|repo(sitory)?)|survey the (code ?base|repo(sitory)?)|map out (the )?(code ?base|repo(sitory)?))\\b"
     message: "I implement; I don't explore. Have the planner spawn an `explorer` first, then hand me a scoped change with concrete file paths."
-  - pattern: "\\b(force[- ]?push|push to (main|master|origin)|git push|rebase onto|reset --hard)\\b"
+  - pattern: "(?<!\\b(?:not|never|don'?t|doesn'?t|won'?t|shouldn'?t|no|without)\\s+(?:[\\w'-]+[\\s,]+){0,4})\\b(force[- ]?push|push (it |them |the (branch|changes|commits?) )?to (main|master|origin|the remote)|git (push|rebase|reset --hard)|rebase onto|reset --hard)\\b"
     message: "I don't push, pull, or rebase. I commit locally; the harness merges my branch back."
 ---
 
