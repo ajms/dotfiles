@@ -38,5 +38,6 @@ await jiti.import(path.join(root, "_interactive_queue", "queue.test.ts"), { defa
 await jiti.import(path.join(root, "copy-paste", "index.test.ts"), { default: false });
 await jiti.import(path.join(root, "statusline", "codexQuota.test.ts"), { default: false });
 await jiti.import(path.join(root, "subagent", "pi-invocation.test.ts"), { default: false });
+await jiti.import(path.join(root, "subagent", "refuse-patterns.test.ts"), { default: false });
 await jiti.import(path.join(root, "subagent", "skill-scope.test.ts"), { default: false });
 await jiti.import(path.join(root, "subagent", "worktree.test.ts"), { default: false });

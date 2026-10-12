@@ -9,7 +9,7 @@ refuse:
     message: "Your task contains a large pasted code block. Refer to files by path (and optionally `symbol=` or line range) — I have `read` and `search` and can fetch the source myself."
   - pattern: "here (is|are) (the )?(full|entire|complete|whole|raw) (file|contents|source|code)"
     message: "Don't paste file contents into the task. Give me the path (and optionally a symbol or line range); I'll read it myself."
-  - pattern: "\\b(implement|patch|refactor|create the (file|module)|build the|add the (function|method|endpoint|component))\\b"
+  - pattern: "(?:^|[.!?;:\\n]\\s*|\\b(?:please|then)\\s+)(?<!\\b(?:not|never|don'?t|doesn'?t|won'?t|shouldn'?t|no|without)\\s+(?:[\\w'-]+[\\s,]+){0,4})(implement|patch|refactor|fix|(create|write|add) (a |an |the )?(new )?(file|module|function|method|endpoint|component|test))\\b"
     message: "I only locate and summarise. For changes, the orchestrator should call the `builder` agent."
   - pattern: "\\b(read|return|send|give|show|paste|dump|provide|share|fetch|grab|pull|output)\\b[^.!?\\n]{0,40}\\b(full|entire|complete|whole|raw|verbatim)\\s+(file|files|contents|source|code|listing|body)\\b"
     message: "I don't read or return file contents. Refer to files by path and (optionally) symbol or line range — the caller has `read` and can fetch detail. My job is to locate and summarise."

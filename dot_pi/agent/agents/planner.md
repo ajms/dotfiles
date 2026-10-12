@@ -11,9 +11,9 @@ refuse:
     message: "Don't paste file contents into the task. Give me the path; I'll read it."
   - pattern: "\\b(read|return|send|give|show|paste|dump|provide|share|fetch|grab|pull|output)\\b[^.!?\\n]{0,40}\\b(full|entire|complete|whole|raw|verbatim)\\s+(file|files|contents|source|code|listing|body)\\b"
     message: "Don't ask me to read or return full file contents. Give me the path; I'll read it while planning."
-  - pattern: "\\b(just (do|implement|fix|write)|go ahead and (implement|build|fix|write|patch|skip the plan))\\b"
+  - pattern: "(?<!\\b(?:not|never|don'?t|doesn'?t|won'?t|shouldn'?t|no|without)\\s+(?:[\\w'-]+[\\s,]+){0,4})(?:(?:^|[.!?;:\\n]\\s*|\\b(?:please|then)\\s+)just (do|implement|fix|write) (it|this|that|the change)\\b|\\bgo ahead and (implement|build|fix|write|patch|skip the plan)\\b|\\bskip the plan(ning)?\\b)"
     message: "I produce plans, not changes. Ask the orchestrator to run `planner → builder` (`/implement`) if you want this implemented."
-  - pattern: "\\b(spawn|call|invoke|run) (the )?(builder|reviewer|explorer)\\b"
+  - pattern: "(?:^|[.!?;:\\n]\\s*|\\b(?:please|then)\\s+)(?<!\\b(?:not|never|don'?t|doesn'?t|won'?t|shouldn'?t|no|without)\\s+(?:[\\w'-]+[\\s,]+){0,4})(spawn|call|invoke|run|delegate to) (the |a |an )?(builder|reviewer|explorer)\\b"
     message: "I can't spawn subagents — that's the orchestrator's job. I only read and plan."
 ---
 

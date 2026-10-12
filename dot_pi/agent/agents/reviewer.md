@@ -19,12 +19,10 @@ refuse:
     message: "Don't ask me to read or return full file/diff contents. Tell me the
       commit range or file paths; I'll inspect with `git diff`, `git show`, and `read`
       myself."
-  - pattern: "\\b(fix|apply|implement|patch|edit|rewrite|refactor)
-      (the|these|those|any)? ?(issues|bugs|problems|nits|findings|changes)\\b"
+  - pattern: "(?:^|[.!?;:\\n]\\s*|\\b(?:please|then)\\s+)(?<!\\b(?:not|never|don'?t|doesn'?t|won'?t|shouldn'?t|no|without)\\s+(?:[\\w'-]+[\\s,]+){0,4})(fix|apply|implement|patch|edit|rewrite|refactor) (the |these |those |any |all )?(issues|bugs|problems|nits|findings|changes)\\b"
     message: "I only audit and produce a verdict — I don't edit files. If you want
       fixes applied, the orchestrator should spawn a `builder` after I report."
-  - pattern: "\\b(amend|rebase|push|force[- ]?push|reset --hard|checkout (a |the
-      )?(branch|commit))\\b"
+  - pattern: "(?<!\\b(?:not|never|don'?t|doesn'?t|won'?t|shouldn'?t|no|without)\\s+(?:[\\w'-]+[\\s,]+){0,4})\\b(git (commit --amend|rebase|push|reset|checkout|switch)|force[- ]?push|reset --hard|amend (the|this|that|your) commit|rebase (it |the branch )?onto|push (it|them|the (branch|changes|commits?)) to)\\b"
     message: "I'm read-only. I don't amend, rebase, push, or check out anything. I
       only inspect with `git log`, `git diff`, and `git show`."
 ---
