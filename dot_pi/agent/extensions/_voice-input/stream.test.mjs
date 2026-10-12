@@ -7,9 +7,16 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import process from "node:process";
 import test from "node:test";
+import { existsSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 
-import { pcmToWav, resolveStreamConfig, transcribePcm } from "./bin/voice-stream.mjs";
+// In the chezmoi source tree the script is named `executable_voice-stream.mjs`;
+// once deployed it is `voice-stream.mjs`. Support both.
+const deployedScript = new URL("./bin/voice-stream.mjs", import.meta.url);
+const scriptUrl = existsSync(deployedScript)
+	? deployedScript
+	: new URL("./bin/executable_voice-stream.mjs", import.meta.url);
+const { pcmToWav, resolveStreamConfig, transcribePcm } = await import(scriptUrl.href);
 
 const PCM = Buffer.alloc(32_000, 1);
 
@@ -89,7 +96,7 @@ test("wrapper process emits authenticated SYV partial and final events", { timeo
 	try {
 		const address = server.address();
 		assert.ok(address && typeof address !== "string");
-		const wrapper = fileURLToPath(new URL("./bin/voice-stream.mjs", import.meta.url));
+		const wrapper = fileURLToPath(scriptUrl);
 		const child = spawn(process.execPath, [wrapper], {
 			env: {
 				...process.env,
@@ -153,7 +160,7 @@ test("wrapper cancels an in-flight partial before the SYV final request", { time
 	try {
 		const address = server.address();
 		assert.ok(address && typeof address !== "string");
-		const wrapper = fileURLToPath(new URL("./bin/voice-stream.mjs", import.meta.url));
+		const wrapper = fileURLToPath(scriptUrl);
 		const child = spawn(process.execPath, [wrapper], {
 			env: {
 				...process.env,
