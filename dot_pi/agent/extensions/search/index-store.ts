@@ -100,8 +100,8 @@ export function resolveRepoId(cwd: string): string {
  * Get the index directory for a repo ID.
  */
 function getIndexDir(repoId: string): string {
-	const home = os.homedir();
-	return path.join(home, ".pi", "index", repoId);
+	const root = process.env.PI_INDEX_ROOT || path.join(os.homedir(), ".pi", "index");
+	return path.join(root, repoId);
 }
 
 /**

@@ -3,9 +3,13 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
 
 import Database from "better-sqlite3";
+
+const testIndexRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pi-search-index-root-"));
+process.env.PI_INDEX_ROOT = testIndexRoot;
+after(() => fs.rmSync(testIndexRoot, { recursive: true, force: true }));
 
 import {
 	getFileOutline,
