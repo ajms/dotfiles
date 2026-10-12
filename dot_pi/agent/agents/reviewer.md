@@ -2,10 +2,8 @@
 name: reviewer
 description: Reviews recent changes for correctness, style, and scope. Read-only —
   produces a verdict and a list of issues, never edits.
-model:
-  - openai-codex/gpt-6-sol
 tools: read, search, skill, bash, question
-skills: [commit, python, fastapi, vue, sqlmodel, full-stack, slides, agent-browser]
+skills: [commit, python, fastapi, vue, sqlmodel, full-stack, slides]
 worktree: false
 refuse:
   - pattern: "```[\\s\\S]{1500,}```"

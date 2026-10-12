@@ -4,9 +4,10 @@ description:
 ---
 
 1. **Load `github` skill.** Call `skill` with `name: "github"` to load the GitHub skill.
-2. **Switch branch.** Come up with a suitable branch name. Call `bash` to create and
-   checkout that branch: `git checkout -b <branch-name>`. Confirm the branch switch
-   succeeded before proceeding.
+2. **Switch branch.** Come up with a suitable branch name. Call `isolated_new_branch`
+   with that name; it creates the branch in a managed worktree and continues the
+   session there. If it is refused (e.g. dirty checkout or Pi's dotfiles repo), stop
+   and tell the user why rather than falling back to `git checkout -b`.
 3. **Plan.** Call the `subagent` tool with `agent: "planner"`, a 1–5-word `taskName`
    summarising `$@`, and `task: "$@"`. If `$@` is empty (no argument provided), STOP and
    ask the user to call this prompt again with an argument.

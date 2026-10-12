@@ -1,9 +1,7 @@
 ---
 name: planner
 description: Produces concrete implementation plans for code changes. Read-only. Cannot edit files or spawn subagents.
-model:
-  - openai-codex/gpt-6-sol
-tools: read, skill, question
+tools: code_tree, search, read, skill, question
 skills: []
 worktree: false
 refuse:
@@ -14,7 +12,7 @@ refuse:
   - pattern: "\\b(read|return|send|give|show|paste|dump|provide|share|fetch|grab|pull|output)\\b[^.!?\\n]{0,40}\\b(full|entire|complete|whole|raw|verbatim)\\s+(file|files|contents|source|code|listing|body)\\b"
     message: "Don't ask me to read or return full file contents. Give me the path; I'll read it while planning."
   - pattern: "\\b(just (do|implement|fix|write)|go ahead and (implement|build|fix|write|patch|skip the plan))\\b"
-    message: "I produce plans, not changes. Ask the orchestrator to run `planner → builder` (`/plan-and-build`) if you want this implemented."
+    message: "I produce plans, not changes. Ask the orchestrator to run `planner → builder` (`/implement`) if you want this implemented."
   - pattern: "\\b(spawn|call|invoke|run) (the )?(builder|reviewer|explorer)\\b"
     message: "I can't spawn subagents — that's the orchestrator's job. I only read and plan."
 ---

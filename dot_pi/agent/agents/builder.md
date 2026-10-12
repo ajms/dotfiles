@@ -1,10 +1,8 @@
 ---
 name: builder
 description: Implements a concrete, scoped code change. Has full read/write/bash permissions. Always runs in an isolated git worktree that is merged back on completion.
-model:
-  - openai-codex/gpt-6-luna
-tools: search, read, write, edit, skill, bash, question
-skills: [commit, python, fastapi, vue, sqlmodel, full-stack, slides, agent-browser]
+tools: search, read, write, edit, skill, bash, web_browse, question
+skills: [commit, python, fastapi, vue, sqlmodel, full-stack, slides, web-browse]
 worktree: true
 refuse:
   - pattern: "```[\\s\\S]{1500,}```"
@@ -15,7 +13,7 @@ refuse:
     message: "Don't ask me to read or return file contents up to the caller. Give me the path; I'll read it inside my worktree as part of doing the change."
   - pattern: "(reproduce|paste|quote) (the )?(file|module|class|function) (verbatim|in full|entirely)"
     message: "I don't reproduce files verbatim. Give me the path; I'll read it inside my worktree as part of doing the change."
-  - pattern: "\\b(explore|investigate|figure out where|locate where|find out where|survey)\\b"
+  - pattern: "\\b(explore the (code ?base|repo(sitory)?)|survey the (code ?base|repo(sitory)?)|map out (the )?(code ?base|repo(sitory)?))\\b"
     message: "I implement; I don't explore. Have the planner spawn an `explorer` first, then hand me a scoped change with concrete file paths."
   - pattern: "\\b(force[- ]?push|push to (main|master|origin)|git push|rebase onto|reset --hard)\\b"
     message: "I don't push, pull, or rebase. I commit locally; the harness merges my branch back."
