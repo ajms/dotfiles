@@ -32,6 +32,19 @@ import {
 	sessionDirectoryForCwd,
 } from "./git.ts";
 
+// Isolate test git from the user's global config (e.g. commit.gpgsign).
+Object.assign(process.env, {
+	GIT_CONFIG_GLOBAL: "/dev/null",
+	GIT_CONFIG_NOSYSTEM: "1",
+	GIT_CONFIG_COUNT: "3",
+	GIT_CONFIG_KEY_0: "commit.gpgsign",
+	GIT_CONFIG_VALUE_0: "false",
+	GIT_CONFIG_KEY_1: "user.name",
+	GIT_CONFIG_VALUE_1: "Test",
+	GIT_CONFIG_KEY_2: "user.email",
+	GIT_CONFIG_VALUE_2: "test@example.com",
+});
+
 test("preserves output and prompt constraints when continuing in a branch", () => {
 	assert.deepEqual(
 		continuationArgs("/tmp/session.jsonl", "Continue", [

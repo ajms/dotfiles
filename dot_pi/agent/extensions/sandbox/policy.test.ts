@@ -7,6 +7,19 @@ import { test } from "node:test";
 import * as net from "node:net";
 import { bwrapArgs, dangerousCommand, isWithin, resolvePolicy, wrapCommand, type HostPaths, type SandboxPolicy } from "./policy.ts";
 
+// Isolate test git from the user's global config (e.g. commit.gpgsign).
+Object.assign(process.env, {
+	GIT_CONFIG_GLOBAL: "/dev/null",
+	GIT_CONFIG_NOSYSTEM: "1",
+	GIT_CONFIG_COUNT: "3",
+	GIT_CONFIG_KEY_0: "commit.gpgsign",
+	GIT_CONFIG_VALUE_0: "false",
+	GIT_CONFIG_KEY_1: "user.name",
+	GIT_CONFIG_VALUE_1: "Test",
+	GIT_CONFIG_KEY_2: "user.email",
+	GIT_CONFIG_VALUE_2: "test@example.com",
+});
+
 const NO_HOST: HostPaths = { runtimeDirs: [], sockets: [], tmp: fs.mkdtempSync(path.join(os.tmpdir(), "pi-empty-tmp-")) };
 
 function policy(overrides: Partial<SandboxPolicy> = {}): SandboxPolicy {
