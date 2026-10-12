@@ -4,6 +4,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import notifyExtension, { linuxNotifyArgs } from "./index.ts";
 import { RETRY_STATE_EVENT } from "../rate-limit-retry/index.ts";
 
+// Tests run as the parent session even when invoked from a Pi subagent.
+delete process.env.PI_SUBAGENT_CHILD;
+
 test("quiet WebSocket retries cause no failure or premature finish notification", { skip: process.platform !== "darwin" && process.platform !== "linux" }, async () => {
 	const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
 	const listeners = new Map<string, (data: unknown) => void>();

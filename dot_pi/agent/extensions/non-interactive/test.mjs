@@ -5,6 +5,9 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
+// Tests run as the parent session even when invoked from a Pi subagent.
+delete process.env.PI_SUBAGENT_CHILD;
+
 const root = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(root, "..", "_outliner", "package.json"));
 const { createJiti } = require("jiti");
