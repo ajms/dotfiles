@@ -5,6 +5,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import conversationName from "./index.ts";
 
+// Tests may run inside a Pi subagent, which sets this variable and would
+// switch the extension into inherited-label mode. Only the subagent test sets it.
+delete process.env.PI_SUBAGENT_SESSION_NAME;
+
 type Handler = (event: { message: { role: string; content: string } }, ctx: unknown) => Promise<void>;
 
 function harness(initialName = "") {
