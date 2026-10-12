@@ -8,14 +8,20 @@ description:
    with that name; it creates the branch in a managed worktree and continues the
    session there. If it is refused (e.g. dirty checkout or Pi's dotfiles repo), stop
    and tell the user why rather than falling back to `git checkout -b`.
-3. **Plan.** Call the `subagent` tool with `agent: "planner"`, a 1–5-word `taskName`
-   summarising `$@`, and `task: "$@"`. If `$@` is empty (no argument provided), STOP and
-   ask the user to call this prompt again with an argument.
-4. **Build.** Group the plan items by dependency. For each group of independent items,
-   issue multiple separate `subagent` tool calls together, one per item, each with
-   `agent: "builder"`, a 1–5-word `taskName` summarising the item, and `task` quoting the
-   plan item verbatim. Include an instruction to commit before finishing. Wait for one
-   group to finish before starting a group with dependent items.
+3. **Plan (only if needed).** If `$@` is empty (no argument provided), STOP and ask
+   the user to call this prompt again with an argument. Call the `subagent` tool with
+   `agent: "planner"`, a 1–5-word `taskName` summarising `$@`, and `task: "$@"` only
+   when the request is broad, ambiguous, complex, or naturally decomposes into
+   parallel items. For a clear single-workstream change, skip planning.
+4. **Build.** Without a plan, call one `subagent` with `agent: "builder"`, a 1–5-word
+   `taskName` summarising `$@`, and `task` containing the request verbatim. With a
+   plan, group its items by dependency. For each group of independent items, issue
+   multiple separate `subagent` tool calls together, one per item, each with
+   `agent: "builder"`, a 1–5-word `taskName` summarising the item, and `task`
+   containing the plan's Goal and Assumptions sections plus the plan item quoted
+   verbatim, so parallel builders share context. Include an instruction to commit
+   before finishing. Wait for one group to finish before starting a group with
+   dependent items.
 5. **Review only when warranted.** Skip review for simple or low-risk changes. Call one
    `reviewer` only when the implementation has meaningful risk or complexity, or when
    the user explicitly requested review. Multiple workstreams alone do not require one.
