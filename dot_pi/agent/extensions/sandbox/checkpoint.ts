@@ -81,7 +81,7 @@ export async function createCheckpoint(dir: string, label: string): Promise<stri
 	const [latest] = await listCheckpoints(top);
 	if (latest && (await git(top, ["rev-parse", `${latest.name}^{tree}`])) === tree) return latest.name;
 	const parents = head ? ["-p", head] : [];
-	const commit = await git(top, ["commit-tree", tree, ...parents, "-m", label], IDENTITY);
+	const commit = await git(top, ["commit-tree", "--no-gpg-sign", tree, ...parents, "-m", label], IDENTITY);
 	const name = await nextRefName(top);
 	await git(top, ["update-ref", name, commit]);
 	return name;
