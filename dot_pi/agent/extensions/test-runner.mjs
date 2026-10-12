@@ -39,3 +39,4 @@ await jiti.import(path.join(root, "copy-paste", "index.test.ts"), { default: fal
 await jiti.import(path.join(root, "statusline", "codexQuota.test.ts"), { default: false });
 await jiti.import(path.join(root, "subagent", "pi-invocation.test.ts"), { default: false });
 await jiti.import(path.join(root, "subagent", "skill-scope.test.ts"), { default: false });
+await jiti.import(path.join(root, "subagent", "worktree.test.ts"), { default: false });

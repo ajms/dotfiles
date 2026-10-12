@@ -33,6 +33,39 @@ export interface WorktreeCleanupResult {
 	merged: boolean;
 	skipped: boolean;
 	message: string;
+	/** Branch kept (under PRESERVED_BRANCH_PREFIX) because it holds unmerged work. */
+	preservedBranch?: string;
+}
+
+/** Prefix for branches kept after a failed merge/attempt. Never swept. */
+export const PRESERVED_BRANCH_PREFIX = "subagent-preserved/";
+
+export const MERGE_STASH_MESSAGE = "worktree-merge-stash";
+
+/**
+ * Rename a subagent branch to the preserved prefix so the orphan sweep
+ * (which only targets `refs/heads/subagent/`) leaves it alone. Returns the
+ * preserved name, or the original name if the rename failed.
+ */
+export async function preserveBranch(repoRoot: string, branchName: string): Promise<string> {
+	const target = PRESERVED_BRANCH_PREFIX + branchName.replace(/^subagent\//, "");
+	const r = await execGit(repoRoot, ["branch", "-m", branchName, target]);
+	return r.code === 0 ? target : branchName;
+}
+
+export function preservedBranchHint(branch: string): string {
+	return `Commits preserved on branch ${branch}; recover with \`git merge ${branch}\` or \`git cherry-pick <base>..${branch}\`, then \`git branch -D ${branch}\`.`;
+}
+
+/** Locate a stash entry by its message; falls back to undefined if absent. */
+export async function findStashRef(repoRoot: string, message: string): Promise<string | undefined> {
+	const r = await execGit(repoRoot, ["stash", "list", "--format=%gd%x00%s"]);
+	if (r.code !== 0) return undefined;
+	for (const line of r.stdout.split("\n")) {
+		const [ref, subject] = line.split("\0");
+		if (ref && subject && subject.endsWith(message)) return ref.trim();
+	}
+	return undefined;
 }
 
 interface ExecResult {
@@ -143,6 +176,7 @@ export async function sweepOrphanedSubagentArtifacts(repoRoot: string): Promise<
 			const m = /^branch refs\/heads\/(.+)$/.exec(line.trim());
 			if (m) linkedBranches.add(m[1]);
 		}
+		// Only `subagent/` — preserved branches (PRESERVED_BRANCH_PREFIX) are never swept.
 		const brList = await execGit(repoRoot, ["for-each-ref", "--format=%(refname:short)", "refs/heads/subagent/"]);
 		if (brList.code !== 0) return;
 		for (const raw of brList.stdout.split("\n")) {
@@ -286,11 +320,13 @@ export async function mergeAndCleanup(
 
 		let merged = false;
 		let skipped = false;
+		let hasCommits = false;
 		const messages: string[] = [];
 
 		try {
 			// Did the subagent actually produce any commits?
 			const headSha = await git(parentRepoRoot, ["rev-parse", branchName]).catch(() => baseSha);
+			hasCommits = headSha !== baseSha;
 			if (headSha === baseSha) {
 				// No commits — but the subagent may have left uncommitted
 				// changes in the working tree (e.g. when explicitly asked
@@ -343,16 +379,16 @@ export async function mergeAndCleanup(
 				// that would be overwritten. Stash them, merge, then restore.
 				let stashedFiles: string[] = [];
 				try {
-					const modStatus = (await git(parentRepoRoot, ["status", "--porcelain"])).trim().split("\n");
+					const modStatus = (await execGit(parentRepoRoot, ["status", "--porcelain"])).stdout.split("\n");
 					const trackedMods = modStatus
-						.filter(l => l.trimStart().match(/^[^?][MADRCU!]/)) // tracked (not ??), modified/staged
+						.filter(l => l.length > 3 && !l.startsWith("??") && !l.startsWith("!!")) // tracked, modified/staged
 						.map(l => l.slice(3).trim());
 					if (trackedMods.length > 0) {
 						stashedFiles = [...trackedMods];
 						messages.push(
 							`Temporarily stashed ${trackedMods.length} tracked modification(s) that would conflict with merge.`,
 						);
-						await execGit(parentRepoRoot, ["stash", "push", "--include-untracked", "-m", "worktree-merge-stash"]);
+						await execGit(parentRepoRoot, ["stash", "push", "--include-untracked", "-m", MERGE_STASH_MESSAGE]);
 					}
 				} catch {
 					/* ignore pre-check failures — continue anyway */
@@ -398,16 +434,15 @@ export async function mergeAndCleanup(
 					// Restore stashed tracked modifications (may conflict — accept theirs
 					// so the merge result stands, but surface the conflict in the message).
 					if (stashedFiles.length > 0) {
-						const stashRes = await execGit(parentRepoRoot, ["stash", "pop", "stash@{0}"]);
+						const stashRef = (await findStashRef(parentRepoRoot, MERGE_STASH_MESSAGE)) ?? "stash@{0}";
+						const stashRes = await execGit(parentRepoRoot, ["stash", "pop", stashRef]);
 						if (stashRes.code === 0) {
 							messages.push(`Restored ${stashedFiles.length} tracked modification(s) after merge.`);
 						} else {
-							// Stash pop may conflict — leave changes in the working tree either way.
+							// Never drop the user's stash: leave it for manual recovery.
 							messages.push(
-								`Could not fully restore ${stashedFiles.length} tracked modification(s) after merge (possible conflict): ${stashRes.stderr.trim() || stashRes.stdout.trim()}`,
+								`Could not restore ${stashedFiles.length} tracked modification(s) after merge (possible conflict): ${stashRes.stderr.trim() || stashRes.stdout.trim()}. Your changes are preserved in the stash (${stashRef}, message "${MERGE_STASH_MESSAGE}"); restore them manually with \`git stash pop ${stashRef}\` or \`git stash apply ${stashRef}\`.`,
 							);
-							// Force-drop the stash so it doesn't linger.
-							await execGit(parentRepoRoot, ["stash", "drop", "stash@{0}"]).catch(() => {});
 						}
 					}
 				}
@@ -434,10 +469,17 @@ export async function mergeAndCleanup(
 			}
 		}
 
-		// Delete the temp branch (force, since it may be unmerged on failure).
-		const brRes = await execGit(parentRepoRoot, ["branch", "-D", branchName]);
-		if (brRes.code !== 0 && !brRes.stderr.includes("not found")) {
-			messages.push(`Failed to delete branch ${branchName}: ${brRes.stderr.trim() || brRes.stdout.trim()}`);
+		// Delete the temp branch only when merged or nothing to keep; otherwise
+		// preserve it so the subagent's commits aren't lost.
+		let preservedBranch: string | undefined;
+		if (hasCommits && !merged) {
+			preservedBranch = await preserveBranch(parentRepoRoot, branchName);
+			messages.push(preservedBranchHint(preservedBranch));
+		} else {
+			const brRes = await execGit(parentRepoRoot, ["branch", "-D", branchName]);
+			if (brRes.code !== 0 && !brRes.stderr.includes("not found")) {
+				messages.push(`Failed to delete branch ${branchName}: ${brRes.stderr.trim() || brRes.stdout.trim()}`);
+			}
 		}
 
 		// Best-effort: remove the temp parent directory holding the worktree.
@@ -448,6 +490,6 @@ export async function mergeAndCleanup(
 		}
 
 		activeWorktrees.delete(handle);
-		return { merged, skipped, message: messages.join(" ") };
+		return { merged, skipped, message: messages.join(" "), preservedBranch };
 	});
 }
