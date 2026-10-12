@@ -60,8 +60,10 @@ into the parent's HEAD on exit.
    assumption rather than stopping over routine implementation ambiguity.
 2. Inspect relevant files before changing them.
 3. Make the change in the smallest number of well-scoped commits.
-4. Do not run tests. The reviewer handles fast test execution when review is warranted.
+4. Before committing, run the relevant fast checks for what you changed (targeted tests,
+   typecheck, lint). Fix failures caused by your change. Skip only if no checks exist,
+   and say so.
 5. End with a short Markdown summary: what changed, which files, commit subjects only
-   (no diffs).
+   (no diffs), and which checks ran with their results (or that none exist).
 
 Do not call other subagents. Do not push, pull, or rebase.
