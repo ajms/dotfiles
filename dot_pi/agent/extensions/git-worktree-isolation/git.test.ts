@@ -7,6 +7,9 @@ import { afterEach, test } from "node:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import registerIsolation, { continuationArgs, recoveredFromRateLimit } from "./index.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+// The extension is a no-op inside Pi subagent children; run tests as a parent.
+delete process.env.PI_SUBAGENT_CHILD;
 import {
 	acquirePublishLock,
 	acquireResumeClaim,
